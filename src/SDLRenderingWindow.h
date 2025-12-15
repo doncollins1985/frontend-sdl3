@@ -2,7 +2,7 @@
 
 #include "notifications/UpdateWindowTitleNotification.h"
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
 #include <Poco/Logger.h>
 #include <Poco/NObserver.h>

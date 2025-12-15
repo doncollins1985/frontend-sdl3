@@ -232,6 +232,10 @@ void ProjectMSDLApplication::defineOptions(Poco::Util::OptionSet& options)
     options.addOption(Option("beatSensitivity", "", "Beat sensitivity. Between 0.0 and 2.0. Default 1.0.",
                              false, "<number>", true)
                           .binding("projectM.beatSensitivity", _commandLineOverrides));
+
+    options.addOption(Option("save-presets", "", "Directory to save current presets to.",
+                             false, "<path>", true)
+                          .binding("application.savePresetsPath", _commandLineOverrides));
 }
 
 int ProjectMSDLApplication::main(POCO_UNUSED const std::vector<std::string>& args)
@@ -246,11 +250,16 @@ void ProjectMSDLApplication::DisplayHelp(POCO_UNUSED const std::string& name, PO
 {
     Poco::Util::HelpFormatter formatter(options());
 
-    SDL_version sdlBuild;
-    SDL_version sdlLoaded;
+    struct { int major; int minor; int patch; } sdlBuild;
+    sdlBuild.major = SDL_MAJOR_VERSION;
+    sdlBuild.minor = SDL_MINOR_VERSION;
+    sdlBuild.patch = SDL_MICRO_VERSION;
 
-    SDL_VERSION(&sdlBuild);
-    SDL_GetVersion(&sdlLoaded);
+    struct { int major; int minor; int patch; } sdlLoaded;
+    int loadedVer = SDL_GetVersion();
+    sdlLoaded.major = SDL_VERSIONNUM_MAJOR(loadedVer);
+    sdlLoaded.minor = SDL_VERSIONNUM_MINOR(loadedVer);
+    sdlLoaded.patch = SDL_VERSIONNUM_MICRO(loadedVer);
 
     auto* projectMVersion = projectm_get_version_string();
     std::string projectMRuntimeVersion(projectMVersion);

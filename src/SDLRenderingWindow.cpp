@@ -12,7 +12,7 @@
 #include <GL/glew.h>
 #endif
 
-#include <SDL2/SDL_opengl.h>
+#include <SDL3/SDL_opengl.h>
 
 const char* SDLRenderingWindow::name() const
 {
@@ -52,7 +52,7 @@ void SDLRenderingWindow::uninitialize()
 
 void SDLRenderingWindow::GetDrawableSize(int& width, int& height) const
 {
-    SDL_GL_GetDrawableSize(_renderingWindow, &width, &height);
+    SDL_GetWindowSizeInPixels(_renderingWindow, &width, &height);
 }
 
 void SDLRenderingWindow::Swap() const
@@ -75,7 +75,7 @@ void SDLRenderingWindow::ToggleFullscreen()
 void SDLRenderingWindow::Fullscreen()
 {
     SDL_GetWindowSize(_renderingWindow, &_lastWindowWidth, &_lastWindowHeight);
-    SDL_ShowCursor(false);
+    SDL_HideCursor();
     if (_config->getBool("fullscreen.exclusiveMode", false))
     {
         int fullscreenWidth = _config->getInt("fullscreen.width", 0);
@@ -85,7 +85,7 @@ void SDLRenderingWindow::Fullscreen()
             SDL_RestoreWindow(_renderingWindow);
             SDL_SetWindowSize(_renderingWindow, fullscreenWidth, fullscreenHeight);
         }
-        SDL_SetWindowFullscreen(_renderingWindow, SDL_WINDOW_FULLSCREEN);
+        SDL_SetWindowFullscreen(_renderingWindow, true);
         if (_logger.debug())
         {
             int width{0};
@@ -97,7 +97,7 @@ void SDLRenderingWindow::Fullscreen()
     }
     else
     {
-        SDL_SetWindowFullscreen(_renderingWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
+        SDL_SetWindowFullscreen(_renderingWindow, true);
         if (_logger.debug())
         {
             int width{0};
@@ -113,12 +113,12 @@ void SDLRenderingWindow::Fullscreen()
 
 void SDLRenderingWindow::Windowed()
 {
-    SDL_SetWindowFullscreen(_renderingWindow, 0);
-    SDL_SetWindowBordered(_renderingWindow, _config->getBool("borderless", false) ? SDL_FALSE : SDL_TRUE);
+    SDL_SetWindowFullscreen(_renderingWindow, false);
+    SDL_SetWindowBordered(_renderingWindow, _config->getBool("borderless", false) ? false : true);
     if (_lastWindowWidth > 0 && _lastWindowHeight > 0)
     {
         SDL_SetWindowSize(_renderingWindow, _lastWindowWidth, _lastWindowHeight);
-        SDL_ShowCursor(true);
+        SDL_ShowCursor();
 
         poco_debug_f2(_logger, "Entered windowed mode with size %dx%d",
                       _lastWindowWidth, _lastWindowHeight);
@@ -129,16 +129,26 @@ void SDLRenderingWindow::Windowed()
 
 void SDLRenderingWindow::ShowCursor(bool visible)
 {
-    SDL_ShowCursor(visible);
+    if (visible) {
+        SDL_ShowCursor();
+    } else {
+        SDL_HideCursor();
+    }
 }
 
 void SDLRenderingWindow::NextDisplay()
 {
-    auto numDisplays = SDL_GetNumVideoDisplays();
+    int numDisplays = 0;
+    SDL_DisplayID* displays = SDL_GetDisplays(&numDisplays);
+    if (!displays)
+    {
+         return;
+    }
 
     if (numDisplays < 2)
     {
         poco_debug(_logger, "Cannot move the window anywhere.");
+        SDL_free(displays);
         return;
     }
 
@@ -149,19 +159,19 @@ void SDLRenderingWindow::NextDisplay()
         Windowed();
     }
 
-    // Find current display
-    auto currentDisplay = GetCurrentDisplay();
+    // Find current display index
+    int currentDisplayIndex = GetCurrentDisplay();
 
     int left;
     int top;
 
     SDL_GetWindowPosition(_renderingWindow, &left, &top);
 
-    int newDisplay = (currentDisplay + 1) % numDisplays;
+    int newDisplayIndex = (currentDisplayIndex + 1) % numDisplays;
 
-    poco_debug_f1(_logger, "Moving window to display %?d.", newDisplay);
+    poco_debug_f1(_logger, "Moving window to display %?d.", newDisplayIndex);
 
-    if (newDisplay != currentDisplay)
+    if (newDisplayIndex != currentDisplayIndex)
     {
 
         SDL_Rect oldBounds{};
@@ -170,10 +180,10 @@ void SDLRenderingWindow::NextDisplay()
         int leftOffset{0};
         int topOffset{0};
 
-        SDL_GetDisplayBounds(newDisplay, &newBounds);
-        if (currentDisplay >= 0)
+        SDL_GetDisplayBounds(displays[newDisplayIndex], &newBounds);
+        if (currentDisplayIndex >= 0)
         {
-            SDL_GetDisplayBounds(currentDisplay, &oldBounds);
+            SDL_GetDisplayBounds(displays[currentDisplayIndex], &oldBounds);
             leftOffset = left - oldBounds.x;
             topOffset = top - oldBounds.y;
         }
@@ -192,6 +202,7 @@ void SDLRenderingWindow::NextDisplay()
         poco_debug(_logger, "Was in fullscreen before moving.");
         Fullscreen();
     }
+    SDL_free(displays);
 }
 
 void SDLRenderingWindow::CreateSDLWindow()
@@ -214,24 +225,30 @@ void SDLRenderingWindow::CreateSDLWindow()
     if (display > 0)
     {
         poco_debug_f1(_logger, "User requested to place window on monitor %?d.", display);
-        auto numDisplays = SDL_GetNumVideoDisplays();
-        if (display > numDisplays)
-        {
-            display = numDisplays;
-        }
+        
+        int numDisplays = 0;
+        SDL_DisplayID* displays = SDL_GetDisplays(&numDisplays);
+        
+        if (displays) {
+            if (display > numDisplays)
+            {
+                display = numDisplays;
+            }
 
-        SDL_Rect bounds;
-        SDL_GetDisplayBounds(display - 1, &bounds);
+            SDL_Rect bounds;
+            SDL_GetDisplayBounds(displays[display - 1], &bounds);
 
-        if (positionOverridden)
-        {
-            left += bounds.x;
-            top += bounds.y;
-        }
-        else
-        {
-            left = bounds.x;
-            top = bounds.y;
+            if (positionOverridden)
+            {
+                left += bounds.x;
+                top += bounds.y;
+            }
+            else
+            {
+                left = bounds.x;
+                top = bounds.y;
+            }
+            SDL_free(displays);
         }
 
         poco_debug_f3(_logger, "Creating window on monitor %?d at X=%?d Y=%?d.", display, left, top);
@@ -249,14 +266,19 @@ void SDLRenderingWindow::CreateSDLWindow()
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 #endif
 
-    _renderingWindow = SDL_CreateWindow("projectM", left, top, width, height,
-                                        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+    _renderingWindow = SDL_CreateWindow("projectM", width, height,
+                                        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN);
     if (!_renderingWindow)
     {
         auto errorMessage = "Could not create SDL rendering window. Error: " + std::string(SDL_GetError());
         poco_fatal(_logger, errorMessage);
         throw Poco::Exception(errorMessage);
     }
+    
+    if (left != SDL_WINDOWPOS_UNDEFINED && top != SDL_WINDOWPOS_UNDEFINED) {
+         SDL_SetWindowPosition(_renderingWindow, left, top);
+    }
+    SDL_ShowWindow(_renderingWindow);
 
     _glContext = SDL_GL_CreateContext(_renderingWindow);
     if (!_glContext)
@@ -301,7 +323,7 @@ void SDLRenderingWindow::DestroySDLWindow()
 {
     poco_debug(_logger, "Closing rendering window and destroying OpenGL context.");
 
-    SDL_GL_DeleteContext(_glContext);
+    SDL_GL_DestroyContext(_glContext);
     _glContext = nullptr;
 
     SDL_DestroyWindow(_renderingWindow);
@@ -325,7 +347,9 @@ int SDLRenderingWindow::GetCurrentDisplay()
 
     SDL_GetWindowPosition(_renderingWindow, &left, &top);
 
-    auto numDisplays = SDL_GetNumVideoDisplays();
+    int numDisplays = 0;
+    SDL_DisplayID* displays = SDL_GetDisplays(&numDisplays);
+    if (!displays) return -1;
 
     poco_debug_f1(_logger, "Displays available: %?d.", numDisplays);
     poco_debug_f2(_logger, "Window position is X=%?d Y=%?d", left, top);
@@ -335,7 +359,7 @@ int SDLRenderingWindow::GetCurrentDisplay()
     for (int display = 0; display < numDisplays; display++)
     {
         SDL_Rect bounds;
-        SDL_GetDisplayBounds(display, &bounds);
+        SDL_GetDisplayBounds(displays[display], &bounds);
 
         poco_debug_f1(_logger, "Bounds for display %?d:", display);
         poco_debug_f4(_logger, "    X=%?d Y=%?d W=%?d H=%?d", bounds.x, bounds.y, bounds.w, bounds.h);
@@ -349,6 +373,7 @@ int SDLRenderingWindow::GetCurrentDisplay()
         }
     }
 
+    SDL_free(displays);
     return currentDisplay;
 }
 
@@ -453,7 +478,7 @@ void SDLRenderingWindow::OnConfigurationPropertyRemoved(const std::string& key)
 
     if (key == "window.borderless")
     {
-        SDL_SetWindowBordered(_renderingWindow, _config->getBool("borderless", false) ? SDL_FALSE : SDL_TRUE);
+        SDL_SetWindowBordered(_renderingWindow, _config->getBool("borderless", false) ? false : true);
     }
 
     if (key == "window.displayPresetNameInTitle")

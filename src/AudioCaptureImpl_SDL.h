@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
 #include <Poco/Logger.h>
 
@@ -86,13 +86,14 @@ protected:
      *
      * @param userData
      * @param stream
-     * @param len
+     * @param additional_amount
+     * @param total_amount
      */
-    static void AudioInputCallback(void* userData, unsigned char* stream, int len);
+    static void AudioInputCallback(void* userData, SDL_AudioStream* stream, int additional_amount, int total_amount);
 
     projectm* _projectMHandle{nullptr}; //!< Handle if the projectM instance that will receive the audio data.
     int32_t _currentAudioDeviceIndex{-1}; //!< Currently selected audio device index.
-    SDL_AudioDeviceID _currentAudioDeviceID{0}; //!< Device ID of the currently opened audio device.
+    SDL_AudioStream* _currentAudioStream{nullptr}; //!< Stream of the currently opened audio device.
     uint32_t _channels{2};
 
     constexpr static uint32_t _requestedSampleFrequency{44100}; //!< Requested sample frequency. Currently hardcoded as 44100 Hz, as this is what the spectrum analyzer expects.

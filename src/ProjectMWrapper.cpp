@@ -9,7 +9,7 @@
 #include <Poco/File.h>
 #include <Poco/NotificationCenter.h>
 
-#include <SDL2/SDL_opengl.h>
+#include <SDL3/SDL_opengl.h>
 
 #include <cmath>
 

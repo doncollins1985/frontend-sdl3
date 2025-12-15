@@ -58,21 +58,21 @@ else()
     set(DEFAULT_TEXTURES_PATH "\${application.dir}/textures" CACHE STRING "Default textures path in the configuration file.")
 endif()
 
-set(SDL2_LINKAGE "shared" CACHE STRING "Set to either shared or static to specify how libSDL2 should be linked. Defaults to shared.")
+set(SDL3_LINKAGE "shared" CACHE STRING "Set to either shared or static to specify how libSDL3 should be linked. Defaults to shared.")
 option(ENABLE_FREETYPE "Use the Freetype font rendering library instead of the built-in stb_truetype if available" ON)
 
 
 set(PRESET_DIRS "" CACHE STRING "List of paths with presets. Will be installed in \"presets\" ")
 set(TEXTURE_DIRS "" CACHE STRING "List of paths with presets.")
 
-if(NOT SDL2_LINKAGE STREQUAL "shared" AND NOT SDL2_LINKAGE STREQUAL "static")
-    message(FATAL_ERROR "Invalid libSDL2 linkage provided in SDL2_LINKAGE: \"${SDL2_LINKAGE}\".\n"
+if(NOT SDL3_LINKAGE STREQUAL "shared" AND NOT SDL3_LINKAGE STREQUAL "static")
+    message(FATAL_ERROR "Invalid libSDL3 linkage provided in SDL3_LINKAGE: \"${SDL3_LINKAGE}\".\n"
             "Please specify either \"shared\" or \"static\"."
             )
 endif()
 
 find_package(projectM4 REQUIRED COMPONENTS Playlist)
-find_package(SDL2 REQUIRED)
+find_package(SDL3 REQUIRED)
 find_package(Poco REQUIRED COMPONENTS JSON XML Util Foundation)
 
 if(Poco_VERSION VERSION_GREATER_EQUAL 1.14.0)
@@ -84,7 +84,7 @@ if(ENABLE_FREETYPE)
     find_package(Freetype)
 endif()
 
-include(SDL2Target)
+include(SDL3Target)
 include(dependencies_check.cmake)
 include(ImGui.cmake)
 
@@ -97,7 +97,7 @@ endif()
 include(install.cmake)
 include(packaging.cmake)
 
-message(STATUS "SDL version: ${SDL2_VERSION}")
+message(STATUS "SDL version: ${SDL3_VERSION}")
 message(STATUS "Poco version: ${Poco_VERSION}")
 message(STATUS "projectM version: ${projectM4_VERSION}")
 if(Freetype_FOUND)

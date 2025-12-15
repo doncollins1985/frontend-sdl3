@@ -4,11 +4,16 @@
 
 #include "gui/ProjectMGUI.h"
 
+#include "notifications/DisplayToastNotification.h"
+#include "notifications/PlaybackControlNotification.h"
+
 #include <Poco/NotificationCenter.h>
 
 #include <Poco/Util/Application.h>
+#include <Poco/File.h>
+#include <Poco/Path.h>
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
 #include "ProjectMSDLApplication.h"
 
@@ -67,7 +72,7 @@ void RenderLoop::PollEvents()
 
         switch (event.type)
         {
-            case SDL_MOUSEWHEEL:
+            case SDL_EVENT_MOUSE_WHEEL :
 
                 if (!_projectMGui.WantsMouseInput())
                 {
@@ -76,21 +81,21 @@ void RenderLoop::PollEvents()
 
                 break;
 
-            case SDL_KEYDOWN:
+            case SDL_EVENT_KEY_DOWN :
                 if (!_projectMGui.WantsKeyboardInput())
                 {
                     KeyEvent(event.key, true);
                 }
                 break;
 
-            case SDL_KEYUP:
+            case SDL_EVENT_KEY_UP :
                 if (!_projectMGui.WantsKeyboardInput())
                 {
                     KeyEvent(event.key, false);
                 }
                 break;
 
-            case SDL_MOUSEBUTTONDOWN:
+            case SDL_EVENT_MOUSE_BUTTON_DOWN :
                 if (!_projectMGui.WantsMouseInput())
                 {
                     MouseDownEvent(event.button);
@@ -98,7 +103,7 @@ void RenderLoop::PollEvents()
 
                 break;
 
-            case SDL_MOUSEBUTTONUP:
+            case SDL_EVENT_MOUSE_BUTTON_UP :
                 if (!_projectMGui.WantsMouseInput())
                 {
                     MouseUpEvent(event.button);
@@ -106,8 +111,8 @@ void RenderLoop::PollEvents()
 
                 break;
 
-            case SDL_DROPFILE: {
-                char* droppedFilePath = event.drop.file;
+            case SDL_EVENT_DROP_FILE : {
+                const char* droppedFilePath = event.drop.data;
 
                 // first we want to get the config settings that are relevant ehre
                 // namely skipToDropped and droppedFolderOverride
@@ -189,12 +194,11 @@ void RenderLoop::PollEvents()
                     projectm_playlist_set_shuffle(_playlistHandle, true);
                 }
 
-                SDL_free(droppedFilePath);
                 break;
             }
 
 
-            case SDL_QUIT:
+            case SDL_EVENT_QUIT :
                 _wantsToQuit = true;
                 break;
         }
@@ -221,11 +225,11 @@ void RenderLoop::CheckViewportSize()
 
 void RenderLoop::KeyEvent(const SDL_KeyboardEvent& event, bool down)
 {
-    auto keyModifier{static_cast<SDL_Keymod>(event.keysym.mod)};
-    auto keyCode{event.keysym.sym};
+    auto keyModifier{static_cast<SDL_Keymod>(event.mod)};
+    auto keyCode{event.key};
     bool modifierPressed{false};
 
-    if (keyModifier & KMOD_LGUI || keyModifier & KMOD_RGUI || keyModifier & KMOD_LCTRL)
+    if (keyModifier & SDL_KMOD_LGUI || keyModifier & SDL_KMOD_RGUI || keyModifier & SDL_KMOD_LCTRL)
     {
         modifierPressed = true;
     }
@@ -269,41 +273,91 @@ void RenderLoop::KeyEvent(const SDL_KeyboardEvent& event, bool down)
             _sdlRenderingWindow.ShowCursor(_projectMGui.Visible());
             break;
 
-        case SDLK_a: {
+        case SDLK_A: {
             bool aspectCorrectionEnabled = !projectm_get_aspect_correction(_projectMHandle);
             projectm_set_aspect_correction(_projectMHandle, aspectCorrectionEnabled);
         }
         break;
 
-        case SDLK_c:
+        case SDLK_C:
             if (modifierPressed)
             {
                 _projectMWrapper.PresetFileNameToClipboard();
             }
             break;
 
-#ifdef _DEBUG
-        case SDLK_d:
-            // Write next rendered frame to file
-            projectm_write_debug_image_on_next_frame(_projectMHandle, nullptr);
+        case SDLK_S:
+            if (!modifierPressed) {
+                std::string savePath = Poco::Util::Application::instance().config().getString("application.savePresetsPath", "");
+                if (!savePath.empty()) {
+                     char* currentPreset = projectm_playlist_item(_playlistHandle, projectm_playlist_get_position(_playlistHandle));
+                     if (currentPreset) {
+                         try {
+                             Poco::Path source(currentPreset);
+                             Poco::Path dest(savePath);
+                             dest.makeDirectory();
+                             dest.setFileName(source.getFileName());
+                             
+                             Poco::File(source).copyTo(dest.toString());
+                             Poco::NotificationCenter::defaultCenter().postNotification(new DisplayToastNotification("Saved: " + source.getFileName()));
+                             poco_information_f1(_logger, "Saved preset to %s", dest.toString());
+                         } catch (Poco::Exception& e) {
+                             Poco::NotificationCenter::defaultCenter().postNotification(new DisplayToastNotification("Save failed: " + e.displayText()));
+                             poco_error_f1(_logger, "Failed to save preset: %s", e.displayText());
+                         }
+                         projectm_playlist_free_string(currentPreset);
+                     }
+                } else {
+                     Poco::NotificationCenter::defaultCenter().postNotification(new DisplayToastNotification("No save path configured."));
+                }
+            }
             break;
-#endif
 
-        case SDLK_f:
+        case SDLK_D:
+            if (!modifierPressed) {
+                std::string savePath = Poco::Util::Application::instance().config().getString("application.savePresetsPath", "");
+                if (!savePath.empty()) {
+                     char* currentPreset = projectm_playlist_item(_playlistHandle, projectm_playlist_get_position(_playlistHandle));
+                     if (currentPreset) {
+                         try {
+                             Poco::Path source(currentPreset);
+                             Poco::Path dest(savePath);
+                             dest.makeDirectory();
+                             dest.setFileName(source.getFileName());
+                             
+                             Poco::File destFile(dest);
+                             if (destFile.exists()) {
+                                 destFile.remove();
+                                 Poco::NotificationCenter::defaultCenter().postNotification(new DisplayToastNotification("Deleted: " + source.getFileName()));
+                                 poco_information_f1(_logger, "Deleted preset from %s", dest.toString());
+                             } else {
+                                 Poco::NotificationCenter::defaultCenter().postNotification(new DisplayToastNotification("File not found in save dir."));
+                             }
+                         } catch (Poco::Exception& e) {
+                             Poco::NotificationCenter::defaultCenter().postNotification(new DisplayToastNotification("Delete failed: " + e.displayText()));
+                             poco_error_f1(_logger, "Failed to delete preset: %s", e.displayText());
+                         }
+                         projectm_playlist_free_string(currentPreset);
+                     }
+                }
+            }
+            break;
+
+        case SDLK_F:
             if (modifierPressed)
             {
                 _sdlRenderingWindow.ToggleFullscreen();
             }
             break;
 
-        case SDLK_i:
+        case SDLK_I:
             if (modifierPressed)
             {
                 _audioCapture.NextAudioDevice();
             }
             break;
 
-        case SDLK_m:
+        case SDLK_M:
             if (modifierPressed)
             {
                 _sdlRenderingWindow.NextDisplay();
@@ -311,27 +365,27 @@ void RenderLoop::KeyEvent(const SDL_KeyboardEvent& event, bool down)
             }
             break;
 
-        case SDLK_n:
+        case SDLK_N:
             Poco::NotificationCenter::defaultCenter().postNotification(new PlaybackControlNotification(PlaybackControlNotification::Action::NextPreset, _keyStates._shiftPressed));
             break;
 
-        case SDLK_p:
+        case SDLK_P:
             Poco::NotificationCenter::defaultCenter().postNotification(new PlaybackControlNotification(PlaybackControlNotification::Action::PreviousPreset, _keyStates._shiftPressed));
             break;
 
-        case SDLK_r: {
+        case SDLK_R: {
             Poco::NotificationCenter::defaultCenter().postNotification(new PlaybackControlNotification(PlaybackControlNotification::Action::RandomPreset, _keyStates._shiftPressed));
             break;
         }
 
-        case SDLK_q:
+        case SDLK_Q:
             if (modifierPressed)
             {
                 _wantsToQuit = true;
             }
             break;
 
-        case SDLK_y:
+        case SDLK_Y:
             Poco::NotificationCenter::defaultCenter().postNotification(new PlaybackControlNotification(PlaybackControlNotification::Action::ToggleShuffle));
             break;
 
@@ -382,8 +436,8 @@ void RenderLoop::MouseDownEvent(const SDL_MouseButtonEvent& event)
             if (!_mouseDown && _keyStates._shiftPressed)
             {
                 // ToDo: Improve this to differentiate between single click (add waveform) and drag (move waveform).
-                int x;
-                int y;
+                float x;
+                float y;
                 int width;
                 int height;
 
@@ -392,12 +446,12 @@ void RenderLoop::MouseDownEvent(const SDL_MouseButtonEvent& event)
                 SDL_GetMouseState(&x, &y);
 
                 // Scale those coordinates. libProjectM uses a scale of 0..1 instead of absolute pixel coordinates.
-                float scaledX = (static_cast<float>(x) / static_cast<float>(width));
-                float scaledY = (static_cast<float>(height - y) / static_cast<float>(height));
+                float scaledX = (x / static_cast<float>(width));
+                float scaledY = (static_cast<float>(height) - y) / static_cast<float>(height);
 
                 // Add a new waveform.
                 projectm_touch(_projectMHandle, scaledX, scaledY, 0, PROJECTM_TOUCH_TYPE_RANDOM);
-                poco_debug_f2(_logger, "Added new random waveform at %?d,%?d", x, y);
+                poco_debug_f2(_logger, "Added new random waveform at %?f,%?f", x, y);
 
                 _mouseDown = true;
             }

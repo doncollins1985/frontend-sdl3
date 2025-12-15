@@ -3,6 +3,7 @@
 #include <Poco/Util/Application.h>
 
 #include <projectM-4/projectM.h>
+#include <vector>
 
 AudioCaptureImpl::AudioCaptureImpl()
     : _requestedSampleCount(projectm_pcm_get_max_samples())
@@ -32,19 +33,23 @@ std::map<int, std::string> AudioCaptureImpl::AudioDeviceList()
     std::map<int, std::string> deviceList{
         {-1, "Default capturing device"}};
 
-    auto recordingDeviceCount = SDL_GetNumAudioDevices(true);
+    int recordingDeviceCount = 0;
+    SDL_AudioDeviceID *devices = SDL_GetAudioRecordingDevices(&recordingDeviceCount);
 
-    for (int i = 0; i < recordingDeviceCount; i++)
-    {
-        auto deviceName = SDL_GetAudioDeviceName(i, true);
-        if (deviceName)
+    if (devices) {
+        for (int i = 0; i < recordingDeviceCount; i++)
         {
-            deviceList.insert(std::make_pair(i, deviceName));
+            const char* deviceName = SDL_GetAudioDeviceName(devices[i]);
+            if (deviceName)
+            {
+                deviceList.insert(std::make_pair(i, deviceName));
+            }
+            else
+            {
+                poco_error_f2(_logger, "Could not get device name for device index %d: %s", i, std::string(SDL_GetError()));
+            }
         }
-        else
-        {
-            poco_error_f2(_logger, "Could not get device name for device ID %d: %s", i, std::string(SDL_GetError()));
-        }
+        SDL_free(devices);
     }
 
     return deviceList;
@@ -55,23 +60,22 @@ void AudioCaptureImpl::StartRecording(projectm* projectMHandle, int audioDeviceI
     _projectMHandle = projectMHandle;
     _currentAudioDeviceIndex = audioDeviceIndex;
 
-    poco_debug_f1(_logger, "Using SDL audio driver \"%s\".", std::string(SDL_GetCurrentAudioDriver()));
+    const char* driver = SDL_GetCurrentAudioDriver();
+    poco_debug_f1(_logger, "Using SDL audio driver \"%s\".", std::string(driver ? driver : "unknown"));
 
     if (OpenAudioDevice())
     {
-        SDL_PauseAudioDevice(_currentAudioDeviceID, false);
-
+        SDL_ResumeAudioStreamDevice(_currentAudioStream);
         poco_debug(_logger, "Started audio recording.");
     }
 }
 
 void AudioCaptureImpl::StopRecording()
 {
-    if (_currentAudioDeviceID)
+    if (_currentAudioStream)
     {
-        SDL_PauseAudioDevice(_currentAudioDeviceID, true);
-        SDL_CloseAudioDevice(_currentAudioDeviceID);
-        _currentAudioDeviceID = 0;
+        SDL_DestroyAudioStream(_currentAudioStream);
+        _currentAudioStream = nullptr;
 
         poco_debug(_logger, "Stopped audio recording and closed device.");
     }
@@ -81,15 +85,23 @@ void AudioCaptureImpl::NextAudioDevice()
 {
     StopRecording();
 
+    int count = 0;
+    SDL_AudioDeviceID *devices = SDL_GetAudioRecordingDevices(&count);
+    if (devices) SDL_free(devices);
+
     // Will wrap around to default capture device (-1).
-    int nextAudioDeviceId = ((_currentAudioDeviceIndex + 2) % (SDL_GetNumAudioDevices(true) + 1)) - 1;
+    int nextAudioDeviceId = ((_currentAudioDeviceIndex + 2) % (count + 1)) - 1;
 
     StartRecording(_projectMHandle, nextAudioDeviceId);
 }
 
 void AudioCaptureImpl::AudioDeviceIndex(int index)
 {
-    if (index >= -1 && index < SDL_GetNumAudioDevices(true))
+    int count = 0;
+    SDL_AudioDeviceID *devices = SDL_GetAudioRecordingDevices(&count);
+    if (devices) SDL_free(devices);
+
+    if (index >= -1 && index < count)
     {
         StopRecording();
         _currentAudioDeviceIndex = index;
@@ -106,7 +118,17 @@ std::string AudioCaptureImpl::AudioDeviceName() const
 {
     if (_currentAudioDeviceIndex >= 0)
     {
-        return SDL_GetAudioDeviceName(_currentAudioDeviceIndex, true);
+        int count = 0;
+        SDL_AudioDeviceID *devices = SDL_GetAudioRecordingDevices(&count);
+        std::string name = "Unknown Device";
+        if (devices) {
+             if (_currentAudioDeviceIndex < count) {
+                 const char* n = SDL_GetAudioDeviceName(devices[_currentAudioDeviceIndex]);
+                 if (n) name = n;
+             }
+             SDL_free(devices);
+        }
+        return name;
     }
     else
     {
@@ -117,46 +139,61 @@ std::string AudioCaptureImpl::AudioDeviceName() const
 bool AudioCaptureImpl::OpenAudioDevice()
 {
     SDL_AudioSpec requestedSpecs{};
-    SDL_AudioSpec actualSpecs{};
-
+    
     requestedSpecs.freq = _requestedSampleFrequency;
-    requestedSpecs.format = AUDIO_F32;
+    requestedSpecs.format = SDL_AUDIO_F32LE;
     requestedSpecs.channels = 2;
-    requestedSpecs.samples = _requestedSampleCount;
-    requestedSpecs.callback = AudioCaptureImpl::AudioInputCallback;
-    requestedSpecs.userdata = this;
 
-    // Will be NULL on error, which happens if the requested index is -1. This automatically selects the default device.
-    auto deviceName = SDL_GetAudioDeviceName(_currentAudioDeviceIndex, true);
-    _currentAudioDeviceID = SDL_OpenAudioDevice(deviceName, true, &requestedSpecs, &actualSpecs, SDL_AUDIO_ALLOW_CHANNELS_CHANGE);
+    SDL_AudioDeviceID deviceID = SDL_AUDIO_DEVICE_DEFAULT_RECORDING;
+    const char *deviceName = "System default capturing device";
 
-    if (_currentAudioDeviceID == 0)
+    if (_currentAudioDeviceIndex >= 0) {
+        int count = 0;
+        SDL_AudioDeviceID *devices = SDL_GetAudioRecordingDevices(&count);
+        if (devices) {
+            if (_currentAudioDeviceIndex < count) {
+                deviceID = devices[_currentAudioDeviceIndex];
+                deviceName = SDL_GetAudioDeviceName(deviceID);
+            }
+            SDL_free(devices);
+        }
+    }
+    
+    _currentAudioStream = SDL_OpenAudioDeviceStream(deviceID, &requestedSpecs, AudioCaptureImpl::AudioInputCallback, this);
+
+    if (!_currentAudioStream)
     {
-        poco_error_f3(_logger, R"(Failed to open audio device "%s" (ID %?d): %s)",
-                      std::string(deviceName != nullptr ? deviceName : "System default capturing device"),
+        poco_error_f3(_logger, R"(Failed to open audio device \"%s\" (Index %?d): %s)",
+                      std::string(deviceName ? deviceName : "Unknown"),
                       _currentAudioDeviceIndex,
                       std::string(SDL_GetError()));
         return false;
     }
 
-    _channels = actualSpecs.channels;
+    _channels = requestedSpecs.channels;
 
-    poco_information_f4(_logger, R"(Opened audio recording device "%s" (ID %?d) with %?d channels at %?d Hz.)",
-                        std::string(deviceName != nullptr ? deviceName : "System default capturing device"),
+    poco_information_f4(_logger, R"(Opened audio recording device \"%s\" (Index %?d) with %?d channels at %?d Hz.)",
+                        std::string(deviceName ? deviceName : "Unknown"),
                         _currentAudioDeviceIndex,
-                        actualSpecs.channels,
-                        actualSpecs.freq);
+                        _channels,
+                        requestedSpecs.freq);
 
     return true;
 }
 
-void AudioCaptureImpl::AudioInputCallback(void* userData, unsigned char* stream, int len)
+void AudioCaptureImpl::AudioInputCallback(void* userData, SDL_AudioStream* stream, int additional_amount, int total_amount)
 {
     poco_assert_dbg(userData);
     auto instance = reinterpret_cast<AudioCaptureImpl*>(userData);
-
-    unsigned int samples = len / sizeof(float) / instance->_channels;
-
-    projectm_pcm_add_float(instance->_projectMHandle, reinterpret_cast<float*>(stream), samples,
-                           static_cast<projectm_channels>(instance->_channels));
+    
+    if (total_amount > 0) {
+        std::vector<float> buffer(total_amount / sizeof(float));
+        int bytesRead = SDL_GetAudioStreamData(stream, buffer.data(), total_amount);
+        
+        if (bytesRead > 0) {
+            unsigned int samples = bytesRead / sizeof(float) / instance->_channels;
+            projectm_pcm_add_float(instance->_projectMHandle, buffer.data(), samples,
+                                   static_cast<projectm_channels>(instance->_channels));
+        }
+    }
 }
