@@ -1,4 +1,4 @@
-# ProjectM SDL2 Frontend
+# ProjectM SDL3 Frontend
 
 This is a reference implementation of an applicatiaon that makes use of the projectM music visualization library.
 
@@ -13,7 +13,7 @@ present.
 
 First, [build libprojectM](https://github.com/projectM-visualizer/projectm/wiki/Building-libprojectM) or get it via your
 favorite dependency management/packaging tool. For testing, you can install libprojectM somewhere inside your
-home/development directory using `CMAKE_INSTALL_PREFIX`, then pass the same install path to the frontend-sdl2 build
+home/development directory using `CMAKE_INSTALL_PREFIX`, then pass the same install path to the frontend-SDL3 build
 using `CMAKE_PREFIX_PATH`. Please refer
 to [CMake's documentation](https://cmake.org/cmake/help/latest/variable/CMAKE_PREFIX_PATH.html) for details.
 
@@ -21,7 +21,7 @@ to [CMake's documentation](https://cmake.org/cmake/help/latest/variable/CMAKE_PR
 
 This project requires third-party libraries in addition to libprojectM's core library dependencies:
 
-- SDL2 (version 2.0.16 or higher)
+- SDL3 (version 3.0 or higher)
 - POCO (recommended version 1.12 or higher, minimum is 1.9.x)
 - Freetype 2 (optional, will provide better looking UI text)
 
@@ -32,9 +32,9 @@ Depending on your needs, you can either build them yourself or install them usin
 are some examples for the three major desktop platforms:
 
 ```shell
-sudo apt install libsdl2-dev libpoco-dev libfreetype-dev cmake  # Debian/Ubuntu Linux
-brew install sdl2 poco freetype  # macOS
-vcpkg install sdl2 poco freetype # Windows, should be pulled in automatically via vcpkg.json
+sudo apt install libsdl3-dev libpoco-dev libfreetype-dev cmake  # Debian/Ubuntu Linux
+brew install sdl3 poco freetype  # macOS
+vcpkg install sdl3 poco freetype # Windows, should be pulled in automatically via vcpkg.json
 ```
 
 ### Configure and build projectMSDL
