@@ -99,7 +99,7 @@ jobs:
           mkdir cmake-build-frontend-sdl3
           cmake -G Ninja -S frontend-sdl3 -B cmake-build-frontend-sdl3  \
             -DCMAKE_BUILD_TYPE=Release  \
-            "-DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/install-libprojectm;${GITHUB_WORKSPACE}/install-poco;${GITHUB_WORKSPACE}/install-sdl3"
+            "-DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/install-libprojectm;${GITHUB_WORKSPACE}/install-poco;${GITHUB_WORKSPACE}/install-sdl3" \
             "-DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install-frontend-sdl3"
           cmake --build cmake-build-frontend-sdl3 --parallel
 
