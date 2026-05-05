@@ -42,15 +42,32 @@ on:
 
 jobs:
   build-deb:
-    name: DEB Package, Ubuntu Linux 2.04 x86_64
-    runs-on: ubuntu-2.04
+    name: DEB Package, Ubuntu Linux 22.04 x86_64
+    runs-on: ubuntu-22.04
 
     steps:
-
       - name: Install Build Dependencies
         run: |
           sudo apt update
-          sudo apt install build-essential libgl1-mesa-dev mesa-common-dev libsdl3-dev ninja-build libssl-dev libfreetype6-dev
+          sudo apt install build-essential libgl1-mesa-dev mesa-common-dev libpoco-dev ninja-build libssl-dev libfreetype6-dev
+
+      - name: Checkout SDL3 Sources
+        uses: actions/checkout@v6
+        with:
+          repository: libsdl-org/SDL
+          path: sdl3
+          ref: 'main'  # or a specific release tag
+          submodules: recursive
+
+      - name: Build/Install SDL3
+        run: |
+          mkdir cmake-build-sdl3
+          cmake -G Ninja -S sdl3 -B cmake-build-sdl3 \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install-sdl3
+          cmake --build cmake-build-sdl3 --parallel
+          cmake --install ${{ github.workspace }}/cmake-build-sdl3
 
       # We need to build/link Poco ourselves as static libraries, because Ubuntu Jammy ships with a broken Poco 1.11.0
       # and other distros may ship different versions as well. POCO as a C++ library has no stable ABI, so each minor
@@ -120,13 +137,13 @@ jobs:
         with:
           repository: projectM-visualizer/presets-milkdrop-texture-pack
           path: presets-milkdrop-texture-pack
-
+      
       - name: Build frontend-sdl3
         run: |
           mkdir cmake-build-frontend-sdl3
           cmake -G Ninja -S frontend-sdl3 -B cmake-build-frontend-sdl3 \
             -DCMAKE_BUILD_TYPE=Release \
-            "-DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/install-libprojectm;${GITHUB_WORKSPACE}/install-poco" \
+            "-DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/install-libprojectm;${GITHUB_WORKSPACE}/install-poco;${GITHUB_WORKSPACE}/install-sdl3"
             "-DPRESET_DIRS=${{ github.workspace }}/presets-cream-of-the-crop" \
             "-DTEXTURE_DIRS=${{ github.workspace }}/presets-milkdrop-texture-pack/textures" \
             '-DDEFAULT_CONFIG_PATH=${application.dir}/../share/projectMSDL/' \
