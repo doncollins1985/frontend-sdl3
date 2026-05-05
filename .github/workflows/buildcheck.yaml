@@ -36,6 +36,7 @@ jobs:
           cmake -G Ninja -S sdl3 -B cmake-build-sdl3 \
             -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_BUILD_TYPE=Release \
+            -DSDL_UNIX_CONSOLE_BUILD=ON \
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install-sdl3
           cmake --build cmake-build-sdl3 --parallel
           cmake --install ${{ github.workspace }}/cmake-build-sdl3
