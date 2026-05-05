@@ -1,98 +1,115 @@
 add_subdirectory(notifications)
 add_subdirectory(gui)
 
-set(PROJECTM_CONFIGURATION_FILE "${CMAKE_CURRENT_BINARY_DIR}/projectMSDL.properties")
+set(PROJECTM_CONFIGURATION_FILE
+    "${CMAKE_CURRENT_BINARY_DIR}/projectMSDL.properties"
+)
 set(PROJECTM_CONFIGURATION_FILE "${PROJECTM_CONFIGURATION_FILE}" PARENT_SCOPE)
-configure_file(resources/projectMSDL.properties.in "${PROJECTM_CONFIGURATION_FILE}" @ONLY)
+configure_file(
+    resources/projectMSDL.properties.in
+    "${PROJECTM_CONFIGURATION_FILE}"
+    @ONLY
+)
 
-add_executable(projectMSDL WIN32 MACOSX_BUNDLE
-        AudioCapture.cpp
-        AudioCapture.h
-        FPSLimiter.cpp
-        FPSLimiter.h
-        ProjectMSDLApplication.cpp
-        ProjectMSDLApplication.h
-        ProjectMWrapper.cpp
-        ProjectMWrapper.h
-        RenderLoop.cpp
-        RenderLoop.h
-        SDLRenderingWindow.cpp
-        SDLRenderingWindow.h
-        main.cpp
-        projectMSDL.rc
-        )
+add_executable(
+    projectMSDL
+    WIN32
+    MACOSX_BUNDLE
+    AudioCapture.cpp
+    AudioCapture.h
+    FPSLimiter.cpp
+    FPSLimiter.h
+    ProjectMSDLApplication.cpp
+    ProjectMSDLApplication.h
+    ProjectMWrapper.cpp
+    ProjectMWrapper.h
+    RenderLoop.cpp
+    RenderLoop.h
+    SDLRenderingWindow.cpp
+    SDLRenderingWindow.h
+    main.cpp
+    projectMSDL.rc
+)
 
 string(TIMESTAMP BUILD_YEAR "%Y" UTC)
-set_target_properties(projectMSDL PROPERTIES
-        OUTPUT_NAME "$<IF:$<PLATFORM_ID:Darwin>,projectM,projectMSDL>" # On macOS, we name the app bundle just "projectM"
+set_target_properties(
+    projectMSDL
+    PROPERTIES
+        OUTPUT_NAME
+            "$<IF:$<PLATFORM_ID:Darwin>,projectM,projectMSDL>" # On macOS, we
+        # name the
+        # app bundle just
+        # "projectM"
         MACOSX_BUNDLE_BUNDLE_NAME "projectM"
         MACOSX_BUNDLE_BUNDLE_VERSION "${projectMSDL_VERSION}"
-        MACOSX_BUNDLE_COPYRIGHT "Copyright © ${BUILD_YEAR} The projectM team and contributors"
+        MACOSX_BUNDLE_COPYRIGHT
+            "Copyright © ${BUILD_YEAR} The projectM team and contributors"
         MACOSX_BUNDLE_GUI_IDENTIFIER "org.projectm.frontend.sdl2"
         MACOSX_BUNDLE_ICON_FILE "projectMSDL.icns"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${projectMSDL_VERSION}"
-        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist.in"
-        )
+        MACOSX_BUNDLE_INFO_PLIST
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist.in"
+)
 
-if (ENABLE_GLES)
-    target_compile_definitions(projectMSDL
-            PUBLIC
-            USE_GLES
-            )
-endif ()
+if(ENABLE_GLES)
+    target_compile_definitions(projectMSDL PUBLIC USE_GLES)
+endif()
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    target_sources(projectMSDL
-            PRIVATE
-            AudioCaptureImpl_WASAPI.h
-            AudioCaptureImpl_WASAPI.cpp
-            )
-    target_compile_definitions(projectMSDL
-            PRIVATE
-            AUDIO_IMPL_HEADER="AudioCaptureImpl_WASAPI.h"
-            )
-else ()
-    target_sources(projectMSDL
-            PRIVATE
-            AudioCaptureImpl_SDL.h
-            AudioCaptureImpl_SDL.cpp
-            )
-    target_compile_definitions(projectMSDL
-            PRIVATE
-            AUDIO_IMPL_HEADER="AudioCaptureImpl_SDL.h"
-            )
-endif ()
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_sources(
+        projectMSDL
+        PRIVATE AudioCaptureImpl_WASAPI.h AudioCaptureImpl_WASAPI.cpp
+    )
+    target_compile_definitions(
+        projectMSDL
+        PRIVATE AUDIO_IMPL_HEADER="AudioCaptureImpl_WASAPI.h"
+    )
+else()
+    target_sources(
+        projectMSDL
+        PRIVATE AudioCaptureImpl_SDL.h AudioCaptureImpl_SDL.cpp
+    )
+    target_compile_definitions(
+        projectMSDL
+        PRIVATE AUDIO_IMPL_HEADER="AudioCaptureImpl_SDL.h"
+    )
+endif()
 
 # GLEW needs to be initialized if libprojectM depends on it (<v4.2).
-if (TARGET GLEW::glew OR TARGET GLEW::glew_s)
-    target_compile_definitions(projectMSDL
-            PRIVATE
-            USE_GLEW
-            )
-endif ()
+if(TARGET GLEW::glew OR TARGET GLEW::glew_s)
+    target_compile_definitions(projectMSDL PRIVATE USE_GLEW)
+endif()
 
-set_source_files_properties(ProjectMSDLApplication.cpp PROPERTIES
-        COMPILE_DEFINITIONS PROJECTMSDL_CONFIG_LOCATION=\"${DEFAULT_CONFIG_PATH}\"
-        )
+set_source_files_properties(
+    ProjectMSDLApplication.cpp
+    PROPERTIES
+        COMPILE_DEFINITIONS
+            PROJECTMSDL_CONFIG_LOCATION=\"${DEFAULT_CONFIG_PATH}\"
+)
 
-target_compile_definitions(projectMSDL
-        PRIVATE
-        PROJECTMSDL_VERSION="${PROJECT_VERSION}"
-        )
+target_compile_definitions(
+    projectMSDL
+    PRIVATE PROJECTMSDL_VERSION="${PROJECT_VERSION}"
+)
 
-target_link_libraries(projectMSDL
-        PRIVATE
+target_link_libraries(
+    projectMSDL
+    PRIVATE
         ProjectMSDL-GUI
         ProjectMSDL-Notifications
         libprojectM::playlist
         Poco::Util
         SDL3::SDL3$<$<STREQUAL:${SDL3_LINKAGE},static>:-static>
         OpenGL::$<IF:$<BOOL:${ENABLE_GLES}>,GLES3,GL>
-        )
+)
 
-if (MSVC)
-    set_target_properties(projectMSDL
-            PROPERTIES
+# For Windows console applications with SDL3
+if(MSVC)
+    set_target_properties(
+        projectMSDL
+        PROPERTIES
             VS_DPI_AWARE "PerMonitor"
-            )
-endif ()
+            VS_GLOBAL_SUBSYSTEM "Console"
+            LINKER_FLAGS "/SUBSYSTEM:CONSOLE"
+    )
+endif()
