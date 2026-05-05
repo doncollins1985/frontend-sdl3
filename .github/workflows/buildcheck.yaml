@@ -15,7 +15,7 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt update
-          sudo apt install build-essential libgl1-mesa-dev mesa-common-dev libsdl2-dev libpoco-dev ninja-build libssl-dev libfreetype6-dev
+          sudo apt install build-essential libgl1-mesa-dev mesa-common-dev libsdl3-dev libpoco-dev ninja-build libssl-dev libfreetype6-dev
 
       # We need to build/link Poco ourselves as static libraries, because Ubuntu Jammy ships with a broken Poco 1.11.0
       - name: Checkout Poco Sources
@@ -64,31 +64,31 @@ jobs:
           cmake --build cmake-build-libprojectm --parallel
           cmake --install "${{ github.workspace }}/cmake-build-libprojectm"
 
-      - name: Checkout frontend-sdl2 Sources
+      - name: Checkout frontend-sdl3 Sources
         uses: actions/checkout@v6
         with:
-          path: frontend-sdl2
+          path: frontend-sdl3
           submodules: recursive
 
-      - name: Build frontend-sdl2
+      - name: Build frontend-sdl3
         run: |
-          mkdir cmake-build-frontend-sdl2
-          cmake -G Ninja -S frontend-sdl2 -B cmake-build-frontend-sdl2  \
+          mkdir cmake-build-frontend-sdl3
+          cmake -G Ninja -S frontend-sdl3 -B cmake-build-frontend-sdl3  \
             -DCMAKE_BUILD_TYPE=Release  \
             "-DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/install-libprojectm;${GITHUB_WORKSPACE}/install-poco"  \
-            "-DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install-frontend-sdl2"
-          cmake --build cmake-build-frontend-sdl2 --parallel
+            "-DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install-frontend-sdl3"
+          cmake --build cmake-build-frontend-sdl3 --parallel
 
       - name: Package projectMSDL
         run: |
-          cd cmake-build-frontend-sdl2
+          cd cmake-build-frontend-sdl3
           cpack -G DEB
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v6
         with:
           name: projectMSDL-buildcheck-linux
-          path: cmake-build-frontend-sdl2/*.deb
+          path: cmake-build-frontend-sdl3/*.deb
 
   build-windows:
     name: Windows, x64
@@ -143,25 +143,25 @@ jobs:
       - name: Checkout projectMSDL Sources
         uses: actions/checkout@v6
         with:
-          path: frontend-sdl2
+          path: frontend-sdl3
           submodules: recursive
 
       - name: Build projectMSDL
         run: |
-          mkdir cmake-build-frontend-sdl2
-          cmake -G "Visual Studio 17 2022" -A "X64" -S "${{ github.workspace }}/frontend-sdl2" -B "${{ github.workspace }}/cmake-build-frontend-sdl2" -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static  -DCMAKE_PREFIX_PATH="${{ github.workspace }}/install-libprojectm" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/install-frontend-sdl2" -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -DCMAKE_VERBOSE_MAKEFILE=YES -DSDL2_LINKAGE=static -DBUILD_TESTING=YES
-          cmake --build "${{ github.workspace }}/cmake-build-frontend-sdl2" --parallel --config Release
+          mkdir cmake-build-frontend-sdl3
+          cmake -G "Visual Studio 17 2022" -A "X64" -S "${{ github.workspace }}/frontend-sdl3" -B "${{ github.workspace }}/cmake-build-frontend-sdl3" -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static  -DCMAKE_PREFIX_PATH="${{ github.workspace }}/install-libprojectm" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/install-frontend-sdl3" -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -DCMAKE_VERBOSE_MAKEFILE=YES -Dsdl3_LINKAGE=static -DBUILD_TESTING=YES
+          cmake --build "${{ github.workspace }}/cmake-build-frontend-sdl3" --parallel --config Release
 
       - name: Package projectMSDL
         run: |
-          cd cmake-build-frontend-sdl2
+          cd cmake-build-frontend-sdl3
           cpack -G ZIP
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v6
         with:
           name: projectMSDL-buildcheck-windows
-          path: cmake-build-frontend-sdl2/*.zip
+          path: cmake-build-frontend-sdl3/*.zip
 
   build-darwin:
     name: macOS, x86_64
@@ -169,7 +169,7 @@ jobs:
 
     steps:
       - name: Install Build Dependencies
-        run: brew install sdl2 ninja googletest poco
+        run: brew install sdl3 ninja googletest poco
 
       - name: Checkout libprojectM Sources
         uses: actions/checkout@v6
@@ -188,22 +188,22 @@ jobs:
       - name: Checkout projectMSDL Sources
         uses: actions/checkout@v6
         with:
-          path: frontend-sdl2
+          path: frontend-sdl3
           submodules: recursive
 
       - name: Build projectMSDL
         run: |
-          mkdir cmake-build-frontend-sdl2
-          cmake -G Ninja -S "${{ github.workspace }}/frontend-sdl2" -B "${{ github.workspace }}/cmake-build-frontend-sdl2" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ github.workspace }}/install-libprojectm" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/install-frontend-sdl2"
-          cmake --build "${{ github.workspace }}/cmake-build-frontend-sdl2" --parallel
+          mkdir cmake-build-frontend-sdl3
+          cmake -G Ninja -S "${{ github.workspace }}/frontend-sdl3" -B "${{ github.workspace }}/cmake-build-frontend-sdl3" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ github.workspace }}/install-libprojectm" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/install-frontend-sdl3"
+          cmake --build "${{ github.workspace }}/cmake-build-frontend-sdl3" --parallel
 
       - name: Package projectMSDL
         run: |
-          cd cmake-build-frontend-sdl2
+          cd cmake-build-frontend-sdl3
           cpack -G TGZ
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v6
         with:
           name: projectMSDL-buildcheck-macos
-          path: cmake-build-frontend-sdl2/*.tar.gz
+          path: cmake-build-frontend-sdl3/*.tar.gz
