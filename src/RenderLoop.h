@@ -19,6 +19,8 @@ public:
 
     void Run();
 
+    void SaveCurrentPreset();
+
 protected:
     struct ModifierKeyStates {
         bool AnyPressed() const

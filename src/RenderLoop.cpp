@@ -17,6 +17,10 @@
 
 #include "ProjectMSDLApplication.h"
 
+#include <iostream>
+
+#include <fstream>  // for std::ofstream
+
 RenderLoop::RenderLoop()
     : _audioCapture(Poco::Util::Application::instance().getSubsystem<AudioCapture>())
     , _projectMWrapper(Poco::Util::Application::instance().getSubsystem<ProjectMWrapper>())
@@ -379,10 +383,7 @@ void RenderLoop::KeyEvent(const SDL_KeyboardEvent& event, bool down)
         }
 
         case SDLK_Q:
-            if (modifierPressed)
-            {
-                _wantsToQuit = true;
-            }
+            _wantsToQuit = true;
             break;
 
         case SDLK_Y:
@@ -479,7 +480,46 @@ void RenderLoop::MouseUpEvent(const SDL_MouseButtonEvent& event)
     }
 }
 
-void RenderLoop::QuitNotificationHandler(const Poco::AutoPtr<QuitNotification>& notification)
+void RenderLoop::SaveCurrentPreset()
+{
+    // Get the current preset name
+    auto presetName = projectm_playlist_item(_playlistHandle, projectm_playlist_get_position(_playlistHandle));
+
+    // Create a Poco::Path for the preset
+    Poco::Path presetFile(presetName);
+    projectm_playlist_free_string(presetName);
+
+    // Construct the full path to the destination directory
+    Poco::Path destinationDir("/home/don/.local/share/projectM/favorites");
+    Poco::Path destinationPath = destinationDir.append(presetFile.getBaseName() + ".milk");
+
+    // Open the source preset file for reading
+    std::ifstream sourceFile(presetFile.toString(), std::ios::binary);
+
+    if (!sourceFile.is_open()) {
+        std::cerr << "Failed to open source preset file for reading." << std::endl;
+        return;
+    }
+
+    // Open the destination file for writing
+    std::ofstream destinationFile(destinationPath.toString(), std::ios::binary);
+
+    if (!destinationFile.is_open()) {
+        std::cerr << "Failed to open destination file for writing." << std::endl;
+        return;
+    }
+
+    // Copy the contents from source to destination
+    destinationFile << sourceFile.rdbuf();
+
+    // Close the files
+    sourceFile.close();
+    destinationFile.close();
+
+    std::cout << "Saved preset to: " << destinationPath.toString() << std::endl;
+}
+
+    void RenderLoop::QuitNotificationHandler(const Poco::AutoPtr<QuitNotification>& notification)
 {
     _wantsToQuit = true;
 }
