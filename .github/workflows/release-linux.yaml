@@ -144,7 +144,7 @@ jobs:
           mkdir cmake-build-frontend-sdl3
           cmake -G Ninja -S frontend-sdl3 -B cmake-build-frontend-sdl3 \
             -DCMAKE_BUILD_TYPE=Release \
-            "-DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/install-libprojectm;${GITHUB_WORKSPACE}/install-poco;${GITHUB_WORKSPACE}/install-sdl3"
+            "-DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/install-libprojectm;${GITHUB_WORKSPACE}/install-poco;${GITHUB_WORKSPACE}/install-sdl3" \
             "-DPRESET_DIRS=${{ github.workspace }}/presets-cream-of-the-crop" \
             "-DTEXTURE_DIRS=${{ github.workspace }}/presets-milkdrop-texture-pack/textures" \
             '-DDEFAULT_CONFIG_PATH=${application.dir}/../share/projectMSDL/' \
