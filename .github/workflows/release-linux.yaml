@@ -50,7 +50,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install build-essential libgl1-mesa-dev mesa-common-dev libpoco-dev ninja-build \
-          libssl-dev libfreetype6-dev libxcursor-dev libxinput-dev
+          libssl-dev libfreetype6-dev libxcursor-dev libxi-dev
 
       - name: Checkout SDL3 Sources
         uses: actions/checkout@v6
