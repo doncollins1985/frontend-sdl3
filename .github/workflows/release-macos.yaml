@@ -58,26 +58,26 @@ jobs:
 
     steps:
 
-      # We need to build third-party libraries (POCO, SDL2 and projectM) ourselves, as neither Homebrew
+      # We need to build third-party libraries (POCO, SDL3 and projectM) ourselves, as neither Homebrew
       # nor vcpkg support building universal binaries.
-      - name: Checkout libSDL2 Sources
+      - name: Checkout libSDL3 Sources
         uses: actions/checkout@v6
         with:
           repository: libsdl-org/SDL
-          path: libsdl2
-          ref: 'release-2.32.10'
+          path: libsdl3
+          ref: 'release-3.32.10'
           submodules: recursive
 
-      - name: Build libSDL2
+      - name: Build libSDL3
         run: |
-          mkdir cmake-build-libsdl2
-          cmake -G Ninja -S libsdl2 -B cmake-build-libsdl2 \
+          mkdir cmake-build-libsdl3
+          cmake -G Ninja -S libsdl3 -B cmake-build-libsdl3 \
             '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' \
             -DBUILD_SHARED_LIBS=ON  \
             -DCMAKE_BUILD_TYPE=Release  \
-            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install-libsdl2
-          cmake --build cmake-build-libsdl2 --parallel
-          cmake --install "${{ github.workspace }}/cmake-build-libsdl2"
+            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install-libsdl3
+          cmake --build cmake-build-libsdl3 --parallel
+          cmake --install "${{ github.workspace }}/cmake-build-libsdl3"
 
       - name: Checkout Poco Sources
         uses: actions/checkout@v6
@@ -135,7 +135,7 @@ jobs:
       - name: Checkout projectMSDL Sources
         uses: actions/checkout@v6
         with:
-          path: frontend-sdl2
+          path: frontend-sdl3
           ref: ${{ inputs.projectMSDLref }}
           submodules: recursive
 
@@ -174,25 +174,25 @@ jobs:
 
       - name: Build projectMSDL
         run: |
-          mkdir cmake-build-frontend-sdl2
-          cmake -G Ninja -S frontend-sdl2 -B cmake-build-frontend-sdl2 \
+          mkdir cmake-build-frontend-sdl3
+          cmake -G Ninja -S frontend-sdl3 -B cmake-build-frontend-sdl3 \
             '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' \
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_FREETYPE=OFF \
-            "-DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/install-libprojectm;${GITHUB_WORKSPACE}/install-poco;${GITHUB_WORKSPACE}/install-libsdl2" \
+            "-DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/install-libprojectm;${GITHUB_WORKSPACE}/install-poco;${GITHUB_WORKSPACE}/install-libsdl3" \
             "-DPRESET_DIRS=${{ github.workspace }}/presets-cream-of-the-crop" \
             "-DTEXTURE_DIRS=${{ github.workspace }}/presets-milkdrop-texture-pack/textures" \
             -DENABLE_INSTALL_BDEPS=ON
-          cmake --build cmake-build-frontend-sdl2 --parallel
-          cmake --install cmake-build-frontend-sdl2 --prefix "${{ github.workspace }}/install"
+          cmake --build cmake-build-frontend-sdl3 --parallel
+          cmake --install cmake-build-frontend-sdl3 --prefix "${{ github.workspace }}/install"
 
       - name: Sign Application Bundle
         run: |
           APP_PATH="${{ github.workspace }}/install/projectM.app"
           IDENTITY="Developer ID Application: Mischa Spiegelmock (5926VBQM6Y)"
-          ENTITLEMENTS="${{ github.workspace }}/frontend-sdl2/src/resources/projectMSDL.entitlements"
+          ENTITLEMENTS="${{ github.workspace }}/frontend-sdl3/src/resources/projectMSDL.entitlements"
 
-          # Sign frameworks first (SDL2, Poco, etc.)
+          # Sign frameworks first (SDL3, Poco, etc.)
           if [ -d "$APP_PATH/Contents/Frameworks" ]; then
             find "$APP_PATH/Contents/Frameworks" \( -name "*.dylib" -o -name "*.framework" \) -exec \
               codesign --force --options runtime --sign "$IDENTITY" {} \;
@@ -245,7 +245,7 @@ jobs:
       - name: Create projectMSDL PKG Installer
         run: |
           # Get version from CMake cache
-          VERSION=$(grep 'CMAKE_PROJECT_VERSION:STATIC=' cmake-build-frontend-sdl2/CMakeCache.txt | grep -Eo '([0-9.]+)')
+          VERSION=$(grep 'CMAKE_PROJECT_VERSION:STATIC=' cmake-build-frontend-sdl3/CMakeCache.txt | grep -Eo '([0-9.]+)')
           
           # Build component package from signed app
           pkgbuild \
@@ -253,14 +253,14 @@ jobs:
             --identifier "org.projectm-visualizer.projectmsdl" \
             --version "$VERSION" \
             --install-location "/Applications" \
-            --component-plist "frontend-sdl2/src/resources/projectMSDL-component.plist" \
+            --component-plist "frontend-sdl3/src/resources/projectMSDL-component.plist" \
             "projectMSDL-component.pkg"
 
           # Build unsigned product archive
           productbuild \
-            --distribution "frontend-sdl2/src/resources/distribution.xml" \
+            --distribution "frontend-sdl3/src/resources/distribution.xml" \
             --package-path "." \
-            --resources "frontend-sdl2/src/resources" \
+            --resources "frontend-sdl3/src/resources" \
             "projectM-${VERSION}-macOS-universal-unsigned.pkg"
 
           # Sign the package with productsign
@@ -295,7 +295,7 @@ jobs:
       - name: Create projectMSDL DMG Image
         run: |
           # Get version from CMake cache
-          VERSION=$(grep 'CMAKE_PROJECT_VERSION:STATIC=' cmake-build-frontend-sdl2/CMakeCache.txt | grep -Eo '([0-9.]+)')
+          VERSION=$(grep 'CMAKE_PROJECT_VERSION:STATIC=' cmake-build-frontend-sdl3/CMakeCache.txt | grep -Eo '([0-9.]+)')
 
           # Install create-dmg
           brew install create-dmg
@@ -303,8 +303,8 @@ jobs:
           # Build and sign DMG image
           create-dmg \
             --volname "projectM Installer" \
-            --volicon "frontend-sdl2/src/resources/icons/icon.icns" \
-            --background "frontend-sdl2/src/resources/dmg_background.png" \
+            --volicon "frontend-sdl3/src/resources/icons/icon.icns" \
+            --background "frontend-sdl3/src/resources/dmg_background.png" \
             --window-pos 200 120 \
             --window-size 800 400 \
             --icon-size 100 \
