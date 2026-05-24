@@ -65,7 +65,7 @@ jobs:
         with:
           repository: libsdl-org/SDL
           path: libsdl3
-          ref: 'release-3.32.10'
+          ref: 'release-3.4.8'
           submodules: recursive
 
       - name: Build libSDL3
