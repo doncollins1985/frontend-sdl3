@@ -116,7 +116,7 @@ jobs:
 
   build-windows:
     name: Windows, x64
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       USERNAME: projectM-visualizer
       VCPKG_EXE: ${{ github.workspace }}/vcpkg/vcpkg
