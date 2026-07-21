@@ -3,6 +3,7 @@
 #include <Poco/Util/Application.h>
 
 #include <projectM-4/projectM.h>
+#include <cmath>
 #include <vector>
 
 AudioCaptureImpl::AudioCaptureImpl()
@@ -17,9 +18,14 @@ AudioCaptureImpl::AudioCaptureImpl()
         _requestedSampleCount = std::max(_requestedSampleCount, 300U);
     }
 
-#ifdef SDL_HINT_AUDIO_INCLUDE_MONITORS
+    // Include monitor/loopback devices (system audio output capture) in the recording device list.
+    // This is a music visualizer — capturing system audio is the primary use case.
+    //
+    // SDL_HINT_AUDIO_INCLUDE_MONITORS is only implemented by the PulseAudio driver,
+    // so we also force SDL3 to use PulseAudio (which PipeWire provides via its
+    // pulse-compat layer) to ensure monitor sources appear.
     SDL_SetHint(SDL_HINT_AUDIO_INCLUDE_MONITORS, "1");
-#endif
+    SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "pulseaudio");
     SDL_InitSubSystem(SDL_INIT_AUDIO);
 }
 
@@ -30,8 +36,17 @@ AudioCaptureImpl::~AudioCaptureImpl()
 
 std::map<int, std::string> AudioCaptureImpl::AudioDeviceList()
 {
-    std::map<int, std::string> deviceList{
-        {-1, "Default capturing device"}};
+    if (_deviceListDirty)
+    {
+        RebuildDeviceList();
+    }
+    return _cachedDeviceList;
+}
+
+void AudioCaptureImpl::RebuildDeviceList()
+{
+    _cachedDeviceList.clear();
+    _cachedDeviceList.insert({-1, "Default system audio output"});
 
     int recordingDeviceCount = 0;
     SDL_AudioDeviceID *devices = SDL_GetAudioRecordingDevices(&recordingDeviceCount);
@@ -42,7 +57,25 @@ std::map<int, std::string> AudioCaptureImpl::AudioDeviceList()
             const char* deviceName = SDL_GetAudioDeviceName(devices[i]);
             if (deviceName)
             {
-                deviceList.insert(std::make_pair(i, deviceName));
+                std::string name(deviceName);
+                // Distinguish monitor/loopback sources (system audio output) from
+                // physical microphones. Detection strategies vary by audio backend:
+                //
+                // - PipeWire: monitors are playback devices listed as recording-capable;
+                //   SDL_IsAudioDevicePlayback() returns true.
+                // - PulseAudio: monitors appear as recording devices with "Monitor of"
+                //   in their name; SDL_IsAudioDevicePlayback() returns false.
+                if (SDL_IsAudioDevicePlayback(devices[i]) ||
+                    name.find("Monitor of") != std::string::npos ||
+                    name.find("Monitor Source") != std::string::npos)
+                {
+                    name += " (System Audio)";
+                }
+                else
+                {
+                    name += " (Microphone)";
+                }
+                _cachedDeviceList.insert(std::make_pair(i, name));
             }
             else
             {
@@ -52,7 +85,49 @@ std::map<int, std::string> AudioCaptureImpl::AudioDeviceList()
         SDL_free(devices);
     }
 
-    return deviceList;
+    _deviceListDirty = false;
+}
+
+void AudioCaptureImpl::RefreshDeviceList()
+{
+    _deviceListDirty = true;
+    RebuildDeviceList();
+
+    // Check if the current device index is still valid in the new list.
+    int maxIndex = static_cast<int>(_cachedDeviceList.size()) - 2; // exclude the -1 default entry
+    if (_currentAudioDeviceIndex > maxIndex)
+    {
+        // Current index is out of bounds — try to find the device by its raw name.
+        int newIndex = -1;
+        if (!_currentAudioDeviceRawName.empty())
+        {
+            int count = 0;
+            SDL_AudioDeviceID *devices = SDL_GetAudioRecordingDevices(&count);
+            if (devices)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    const char* name = SDL_GetAudioDeviceName(devices[i]);
+                    if (name && _currentAudioDeviceRawName == name)
+                    {
+                        newIndex = i;
+                        break;
+                    }
+                }
+                SDL_free(devices);
+            }
+        }
+
+        if (newIndex < 0 && _currentAudioDeviceIndex != -1)
+        {
+            poco_information_f1(_logger,
+                                "Audio device \"%s\" was removed. Switching to default device.",
+                                _currentAudioDeviceRawName);
+        }
+
+        StopRecording();
+        StartRecording(_projectMHandle, newIndex);
+    }
 }
 
 void AudioCaptureImpl::StartRecording(projectm* projectMHandle, int audioDeviceIndex)
@@ -85,9 +160,7 @@ void AudioCaptureImpl::NextAudioDevice()
 {
     StopRecording();
 
-    int count = 0;
-    SDL_AudioDeviceID *devices = SDL_GetAudioRecordingDevices(&count);
-    if (devices) SDL_free(devices);
+    int count = static_cast<int>(AudioDeviceList().size()) - 1; // exclude the -1 default entry
 
     // Will wrap around to default capture device (-1).
     int nextAudioDeviceId = ((_currentAudioDeviceIndex + 2) % (count + 1)) - 1;
@@ -97,11 +170,9 @@ void AudioCaptureImpl::NextAudioDevice()
 
 void AudioCaptureImpl::AudioDeviceIndex(int index)
 {
-    int count = 0;
-    SDL_AudioDeviceID *devices = SDL_GetAudioRecordingDevices(&count);
-    if (devices) SDL_free(devices);
+    int maxIndex = static_cast<int>(AudioDeviceList().size()) - 2; // exclude the -1 default entry
 
-    if (index >= -1 && index < count)
+    if (index >= -1 && index <= maxIndex)
     {
         StopRecording();
         _currentAudioDeviceIndex = index;
@@ -132,7 +203,7 @@ std::string AudioCaptureImpl::AudioDeviceName() const
     }
     else
     {
-        return "Default capturing device";
+        return "Default system audio output";
     }
 }
 
@@ -145,9 +216,80 @@ bool AudioCaptureImpl::OpenAudioDevice()
     requestedSpecs.channels = 2;
 
     SDL_AudioDeviceID deviceID = SDL_AUDIO_DEVICE_DEFAULT_RECORDING;
-    const char *deviceName = "System default capturing device";
+    const char *deviceName = "System default recording device";
 
-    if (_currentAudioDeviceIndex >= 0) {
+    if (_currentAudioDeviceIndex == -1) {
+        // Default device: prefer a monitor/loopback source (system audio output) for
+        // music visualization. Fall back to the default recording device if none found.
+        //
+        // Two-pass selection: first look for Speaker/Analog monitors (what the user
+        // actually hears), then fall back to any monitor (e.g. HDMI/DisplayPort).
+        int count = 0;
+        SDL_AudioDeviceID *devices = SDL_GetAudioRecordingDevices(&count);
+        if (devices) {
+            auto isMonitor = [&](int i) -> bool {
+                const char* n = SDL_GetAudioDeviceName(devices[i]);
+                std::string ns(n ? n : "");
+                return SDL_IsAudioDevicePlayback(devices[i]) ||
+                       ns.find("Monitor of") != std::string::npos ||
+                       ns.find("Monitor Source") != std::string::npos;
+            };
+            auto prefersSpeaker = [&](int i) -> bool {
+                const char* n = SDL_GetAudioDeviceName(devices[i]);
+                std::string ns(n ? n : "");
+                // Prefer the user's actual listening device over HDMI/DisplayPort.
+                return ns.find("Speaker") != std::string::npos ||
+                       ns.find("Headphone") != std::string::npos ||
+                       ns.find("Headset") != std::string::npos ||
+                       ns.find("Analog") != std::string::npos;
+            };
+            auto isHDMI = [&](int i) -> bool {
+                const char* n = SDL_GetAudioDeviceName(devices[i]);
+                std::string ns(n ? n : "");
+                return ns.find("HDMI") != std::string::npos ||
+                       ns.find("DisplayPort") != std::string::npos;
+            };
+
+            // Pass 1: prefer Speaker/Headphone/Analog monitors
+            for (int i = 0; i < count; i++) {
+                if (isMonitor(i) && prefersSpeaker(i)) {
+                    deviceID = devices[i];
+                    deviceName = SDL_GetAudioDeviceName(deviceID);
+                    break;
+                }
+            }
+
+            // Pass 2: fall back to any non-HDMI monitor
+            if (deviceID == SDL_AUDIO_DEVICE_DEFAULT_RECORDING) {
+                for (int i = 0; i < count; i++) {
+                    if (isMonitor(i) && !isHDMI(i)) {
+                        deviceID = devices[i];
+                        deviceName = SDL_GetAudioDeviceName(deviceID);
+                        break;
+                    }
+                }
+            }
+
+            // Pass 3: last resort, any monitor (including HDMI)
+            if (deviceID == SDL_AUDIO_DEVICE_DEFAULT_RECORDING) {
+                for (int i = 0; i < count; i++) {
+                    if (isMonitor(i)) {
+                        deviceID = devices[i];
+                        deviceName = SDL_GetAudioDeviceName(deviceID);
+                        break;
+                    }
+                }
+            }
+
+            if (deviceID != SDL_AUDIO_DEVICE_DEFAULT_RECORDING) {
+                poco_debug_f1(_logger, "Default audio device: selected monitor source \"%s\".",
+                              std::string(deviceName ? deviceName : "Unknown"));
+            }
+
+            SDL_free(devices);
+        }
+    }
+    else if (_currentAudioDeviceIndex >= 0) {
         int count = 0;
         SDL_AudioDeviceID *devices = SDL_GetAudioRecordingDevices(&count);
         if (devices) {
@@ -158,6 +300,9 @@ bool AudioCaptureImpl::OpenAudioDevice()
             SDL_free(devices);
         }
     }
+
+    // Store raw device name for recovery on hotplug removal.
+    _currentAudioDeviceRawName = deviceName ? deviceName : "";
     
     _currentAudioStream = SDL_OpenAudioDeviceStream(deviceID, &requestedSpecs, AudioCaptureImpl::AudioInputCallback, this);
 
@@ -194,6 +339,14 @@ void AudioCaptureImpl::AudioInputCallback(void* userData, SDL_AudioStream* strea
             unsigned int samples = bytesRead / sizeof(float) / instance->_channels;
             projectm_pcm_add_float(instance->_projectMHandle, buffer.data(), samples,
                                    static_cast<projectm_channels>(instance->_channels));
+
+            // Track peak audio level for the level indicator.
+            float peak = 0.0f;
+            for (int i = 0; i < bytesRead / static_cast<int>(sizeof(float)); i++) {
+                float absVal = std::fabs(buffer[i]);
+                if (absVal > peak) peak = absVal;
+            }
+            instance->_currentAudioLevel = peak;
         }
     }
 }

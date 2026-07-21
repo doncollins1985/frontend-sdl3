@@ -13,6 +13,18 @@
 
 #include <cmath>
 
+namespace {
+    /**
+     * @brief OpenGL function loader callback for projectM, using SDL's GL proc resolver.
+     */
+    void* SDLProjectMLoadProc(const char* name, void* /*user_data*/)
+    {
+        // SDL_GL_GetProcAddress returns SDL_FunctionPointer (void(*)()),
+        // but projectM expects void*. The cast is safe on all platforms SDL3 supports.
+        return reinterpret_cast<void*>(SDL_GL_GetProcAddress(name));
+    }
+} // anonymous namespace
+
 const char* ProjectMWrapper::name() const
 {
     return "ProjectM Wrapper";
@@ -37,7 +49,7 @@ void ProjectMWrapper::initialize(Poco::Util::Application& app)
         auto presetPaths = GetPathListWithDefault("presetPath", app.config().getString("application.dir", ""));
         auto texturePaths = GetPathListWithDefault("texturePath", app.config().getString("", ""));
 
-        _projectM = projectm_create();
+        _projectM = projectm_create_with_opengl_load_proc(SDLProjectMLoadProc, nullptr);
         if (!_projectM)
         {
             poco_error(_logger, "Failed to initialize projectM. Possible reasons are a lack of required OpenGL features or GPU resources.");

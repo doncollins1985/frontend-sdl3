@@ -5,6 +5,7 @@
 #include "ProjectMSDLApplication.h"
 
 #include "AudioCapture.h"
+#include "PlaylistManager.h"
 #include "ProjectMWrapper.h"
 #include "RenderLoop.h"
 #include "SDLRenderingWindow.h"
@@ -24,6 +25,7 @@ ProjectMSDLApplication::ProjectMSDLApplication()
     // Note: order here is important, as subsystems are initialized in the same order.
     addSubsystem(new SDLRenderingWindow);
     addSubsystem(new ProjectMWrapper);
+    addSubsystem(new PlaylistManager);
     addSubsystem(new AudioCapture);
     addSubsystem(new ProjectMGUI);
 }

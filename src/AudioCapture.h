@@ -59,6 +59,18 @@ public:
      */
     void FillBuffer();
 
+    /**
+     * @brief Forces a refresh of the cached audio device list.
+     *
+     * Call when audio devices are added or removed (hotplug).
+     */
+    void RefreshDeviceList();
+
+    /**
+     * @brief Returns the current peak audio level (0.0 - 1.0).
+     */
+    float CurrentAudioLevel();
+
 protected:
     /**
      * @brief Prints a list of available audio devices on standard output if requested by the user.

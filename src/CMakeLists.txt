@@ -19,6 +19,10 @@ add_executable(
     AudioCapture.h
     FPSLimiter.cpp
     FPSLimiter.h
+    PlaylistManager.cpp
+    PlaylistManager.h
+    PresetRatings.cpp
+    PresetRatings.h
     ProjectMSDLApplication.cpp
     ProjectMSDLApplication.h
     ProjectMWrapper.cpp

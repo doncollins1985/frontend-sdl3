@@ -4,6 +4,7 @@
 
 #include <Poco/Logger.h>
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -72,6 +73,19 @@ public:
      */
     void FillBuffer(){};
 
+    /**
+     * @brief Forces a refresh of the cached audio device list.
+     *
+     * Call this when audio devices have been added or removed (hotplug).
+     * If the currently selected device was removed, falls back to the default.
+     */
+    void RefreshDeviceList();
+
+    /**
+     * @brief Returns the current peak audio level (0.0 - 1.0).
+     */
+    float CurrentAudioLevel() const { return _currentAudioLevel; }
+
 protected:
     /**
      * @brief Opens the SDL audio device with the currently selected index.
@@ -91,10 +105,21 @@ protected:
      */
     static void AudioInputCallback(void* userData, SDL_AudioStream* stream, int additional_amount, int total_amount);
 
+    /**
+     * @brief Rebuilds the cached device list by re-enumerating SDL audio devices.
+     */
+    void RebuildDeviceList();
+
     projectm* _projectMHandle{nullptr}; //!< Handle if the projectM instance that will receive the audio data.
     int32_t _currentAudioDeviceIndex{-1}; //!< Currently selected audio device index.
     SDL_AudioStream* _currentAudioStream{nullptr}; //!< Stream of the currently opened audio device.
     uint32_t _channels{2};
+
+    std::map<int, std::string> _cachedDeviceList; //!< Cached list of available audio devices with source-type labels.
+    bool _deviceListDirty{true}; //!< Whether the cached device list needs to be rebuilt.
+    std::string _currentAudioDeviceRawName; //!< Raw device name of the current device, for recovery on hotplug removal.
+
+    float _currentAudioLevel{0.0f}; //!< Current peak audio level (0.0-1.0), updated by the audio callback.
 
     constexpr static uint32_t _requestedSampleFrequency{44100}; //!< Requested sample frequency. Currently hardcoded as 44100 Hz, as this is what the spectrum analyzer expects.
     uint32_t _requestedSampleCount{44100U / 60U}; //!< Requested audio buffer size. Determines how often SDL will call AudioInputCallback() with new data, and how much data is delivered on each call.

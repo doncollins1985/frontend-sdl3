@@ -1,6 +1,8 @@
 #pragma once
 
 #include "AudioCapture.h"
+#include "PlaylistManager.h"
+#include "PresetRatings.h"
 #include "ProjectMWrapper.h"
 #include "SDLRenderingWindow.h"
 
@@ -74,9 +76,22 @@ protected:
      */
     void QuitNotificationHandler(const Poco::AutoPtr<QuitNotification>& notification);
 
+    /**
+     * @brief Rates the currently playing preset (1-5).
+     */
+    void RateCurrentPreset(int rating);
+
+    /**
+     * @brief Adds the current preset to the Favorites playlist.
+     */
+    void QuickFavoriteCurrentPreset();
+
     AudioCapture& _audioCapture;
+    PlaylistManager& _playlistManager;
     ProjectMWrapper& _projectMWrapper;
     SDLRenderingWindow& _sdlRenderingWindow;
+
+    PresetRatings _ratings; //!< Preset ratings (1-5 stars)
 
     projectm_handle _projectMHandle{nullptr};
     projectm_playlist_handle _playlistHandle{nullptr};
@@ -93,6 +108,8 @@ protected:
     int _renderHeight{0};
 
     ModifierKeyStates _keyStates; //!< Current "pressed" states of modifier keys
+
+    bool _showAudioLevel{true}; //!< Whether the audio level indicator is visible
 
     Poco::AutoPtr<Poco::Util::AbstractConfiguration> _userConfig; //!< View of the "projectM" configuration subkey in the "user" configuration.
 
