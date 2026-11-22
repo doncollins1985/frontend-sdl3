@@ -1,17 +1,15 @@
 #pragma once
 
 #ifdef USE_SDL3
-# include <SDL3/SDL.h>
+#include <SDL3/SDL.h>
 #else
-# include <SDL2/SDL.h>
+#include <SDL2/SDL.h>
 #endif
 
 #include <Poco/Logger.h>
 
+#include <map>
 #include <string>
-#include <vector>
-
-class projectm;
 
 /**
  * @brief SDL-based audio capturing thread.
@@ -33,11 +31,10 @@ public:
 
     /**
      * @brief Starts audio capturing with the first available device.
-     * @param projectMHandle projectM instance handle that will receive the captured data.
      * @param audioDeviceIndex The initial audio device ID to capture from. Use -1 to select the implementation's
      *                      default device.
      */
-    void StartRecording(projectm* projectMHandle, int audioDeviceIndex);
+    void StartRecording(int audioDeviceIndex);
 
     /**
      * @brief Stops audio recording.
@@ -70,15 +67,10 @@ public:
     /**
      * @brief Asks the capture client to fill projectM's audio buffer for the next frame.
      *
-     * In SDL2, audio is captured via callback. In SDL3, audio data is polled here.
+     * SDL2 uses async callbacks to directly fill the staging audio buffer(s) as soon as new data is available.
+     * SDL3 has no audio callback and polls the recording stream here, once per frame.
      */
     void FillBuffer();
-
-    /**
-     * @brief Returns the current audio peak level.
-     * @return A value between 0.0 and 1.0, or -1.0 if not available.
-     */
-    float CurrentAudioLevel() const;
 
     /**
      * @brief Refreshes the audio device list (e.g. after a hotplug event).
@@ -92,20 +84,17 @@ protected:
      */
     bool OpenAudioDevice();
 
-#ifndef USE_SDL3
     /**
-     * @brief SDL2 audio capture callback.
+     * @brief Passes new audio data to the notification center.
      *
-     * Called everytime if there is new data available in the audio recording buffer.
+     * Called from the SDL2 audio thread via the audio callback, and from FillBuffer() on SDL3.
      *
-     * @param userData
-     * @param stream
-     * @param len
+     * @param userData Pointer to the AudioCaptureImpl instance.
+     * @param stream The captured audio data.
+     * @param len The number of valid bytes in @a stream.
      */
     static void AudioInputCallback(void* userData, unsigned char* stream, int len);
-#endif
 
-    projectm* _projectMHandle{nullptr}; //!< Handle if the projectM instance that will receive the audio data.
     int32_t _currentAudioDeviceIndex{-1}; //!< Currently selected audio device index.
 #ifdef USE_SDL3
     SDL_AudioStream* _recordingStream{nullptr}; //!< SDL3 audio stream for recording.

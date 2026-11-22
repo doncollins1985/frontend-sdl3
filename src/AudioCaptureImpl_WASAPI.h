@@ -45,11 +45,10 @@ public:
 
     /**
      * @brief Starts audio capturing with the first available device.
-     * @param projectMHandle projectM instance handle that will receive the captured data.
      * @param audioDeviceIndex The initial audio device ID to capture from. Use -1 to select the implementation's
      *                      default device.
      */
-    void StartRecording(projectm* projectMHandle, int audioDeviceIndex);
+    void StartRecording(int audioDeviceIndex);
 
     /**
      * @brief Stops audio recording.
@@ -83,12 +82,6 @@ public:
      * @brief Asks the capture client to fill projectM's audio buffer for the next frame.
      */
     void FillBuffer();
-
-    /**
-     * @brief Returns the current audio peak level.
-     * @return A value between 0.0 and 1.0, or -1.0 if not available.
-     */
-    float CurrentAudioLevel() const;
 
     /**
      * @brief Refreshes the audio device list (e.g. after a hotplug event).

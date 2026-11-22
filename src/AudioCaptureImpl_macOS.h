@@ -30,7 +30,7 @@ public:
 
     std::map<int, std::string> AudioDeviceList();
 
-    void StartRecording(projectm* projectMHandle, int audioDeviceIndex);
+    void StartRecording(int audioDeviceIndex);
 
     void StopRecording();
 
@@ -43,6 +43,11 @@ public:
     std::string AudioDeviceName() const;
 
     void FillBuffer();
+
+    /**
+     * @brief Refreshes the audio device list (e.g. after a hotplug event).
+     */
+    void RefreshDeviceList();
 
 protected:
     CoreAudioTapCapture* _tap{nullptr}; //!< Core Audio process-tap backend (macOS 14.4+), or null.

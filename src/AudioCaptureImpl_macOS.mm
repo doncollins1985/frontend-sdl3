@@ -42,14 +42,14 @@ std::map<int, std::string> AudioCaptureImpl::AudioDeviceList()
     return _sdl->AudioDeviceList();
 }
 
-void AudioCaptureImpl::StartRecording(projectm* projectMHandle, int audioDeviceIndex)
+void AudioCaptureImpl::StartRecording(int audioDeviceIndex)
 {
     if (_tap)
     {
-        _tap->StartRecording(projectMHandle, audioDeviceIndex);
+        _tap->StartRecording(audioDeviceIndex);
         return;
     }
-    _sdl->StartRecording(projectMHandle, audioDeviceIndex);
+    _sdl->StartRecording(audioDeviceIndex);
 }
 
 void AudioCaptureImpl::StopRecording()
@@ -108,4 +108,14 @@ void AudioCaptureImpl::FillBuffer()
         return;
     }
     _sdl->FillBuffer();
+}
+
+void AudioCaptureImpl::RefreshDeviceList()
+{
+    if (_tap)
+    {
+        // The Core Audio tap exposes a single synthetic device, nothing to refresh.
+        return;
+    }
+    _sdl->RefreshDeviceList();
 }

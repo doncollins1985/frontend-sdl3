@@ -16,9 +16,9 @@ set_property(CACHE USE_SDL PROPERTY STRINGS "Auto" "SDL2" "SDL3")
 # has an effect when building in vcpkg manifest mode. Auto prefers SDL3 so that
 # vcpkg installs libSDL3 instead of libSDL2.
 if(USE_SDL STREQUAL "SDL2")
-    set(VCPKG_MANIFEST_FEATURES "sdl2")
+    list(APPEND VCPKG_MANIFEST_FEATURES "sdl2")
 else()
-    set(VCPKG_MANIFEST_FEATURES "sdl3")
+    list(APPEND VCPKG_MANIFEST_FEATURES "sdl3")
 endif()
 
 project(projectMSDL
@@ -107,7 +107,9 @@ find_package(projectM4 REQUIRED COMPONENTS Playlist)
 
 # --- Resolve SDL version ---
 if(USE_SDL STREQUAL "Auto")
-    find_package(SDL3 QUIET)
+    # SDL 3.2.0 introduced the display-ID and audio recording device APIs used by
+    # this frontend, so older SDL3 versions fall back to SDL2 here.
+    find_package(SDL3 3.2.0 QUIET)
     if(SDL3_FOUND)
         set(USE_SDL SDL3)
     else()
@@ -116,7 +118,7 @@ if(USE_SDL STREQUAL "Auto")
 endif()
 
 if(USE_SDL STREQUAL "SDL3")
-    find_package(SDL3 REQUIRED)
+    find_package(SDL3 3.2.0 REQUIRED)
     set(USE_SDL3 ON)
     set(SDL_VERSION "${SDL3_VERSION}")
     message(STATUS "Using SDL3 (found ${SDL3_VERSION})")

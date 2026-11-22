@@ -19,8 +19,6 @@ void AudioCapture::initialize(Poco::Util::Application& app)
 {
     _config = app.config().createView("audio");
 
-    auto& projectMWrapper = app.getSubsystem<ProjectMWrapper>();
-
     if (!_impl)
     {
         _impl = new AudioCaptureImpl;
@@ -31,7 +29,7 @@ void AudioCapture::initialize(Poco::Util::Application& app)
 
     PrintDeviceList(deviceList);
 
-    _impl->StartRecording(projectMWrapper.ProjectM(), audioDeviceIndex);
+    _impl->StartRecording(audioDeviceIndex);
 }
 
 void AudioCapture::uninitialize()
@@ -150,15 +148,6 @@ int AudioCapture::GetInitialAudioDeviceIndex(const AudioDeviceMap& deviceList)
                         deviceList.at(audioDeviceIndex), audioDeviceIndex);
 
     return audioDeviceIndex;
-}
-
-float AudioCapture::CurrentAudioLevel() const
-{
-    if (!_impl)
-    {
-        return -1.0f;
-    }
-    return _impl->CurrentAudioLevel();
 }
 
 void AudioCapture::RefreshDeviceList()

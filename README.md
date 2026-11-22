@@ -1,4 +1,4 @@
-# ProjectM SDL2 Frontend
+# ProjectM SDL Frontend
 
 This is a reference implementation of an application that makes use of the projectM music visualization library.
 
@@ -13,7 +13,7 @@ present.
 
 First, [build libprojectM](https://github.com/projectM-visualizer/projectm/wiki/Building-libprojectM) or get it via your
 favorite dependency management/packaging tool. For testing, you can install libprojectM somewhere inside your
-home/development directory using `CMAKE_INSTALL_PREFIX`, then pass the same install path to the frontend-sdl2 build
+home/development directory using `CMAKE_INSTALL_PREFIX`, then pass the same install path to the frontend-sdl-cpp build
 using `CMAKE_PREFIX_PATH`. Please refer
 to [CMake's documentation](https://cmake.org/cmake/help/latest/variable/CMAKE_PREFIX_PATH.html) for details.
 
@@ -21,7 +21,7 @@ to [CMake's documentation](https://cmake.org/cmake/help/latest/variable/CMAKE_PR
 
 This project requires third-party libraries in addition to libprojectM's core library dependencies:
 
-- SDL2 (version 2.0.16 or higher)
+- SDL2 (version 2.0.16 or higher) or SDL3 (version 3.2.0 or higher)
 - POCO (recommended version 1.12 or higher, minimum is 1.9.x)
 - Freetype 2 (optional, will provide better looking UI text)
 
@@ -32,9 +32,12 @@ Depending on your needs, you can either build them yourself or install them usin
 are some examples for the three major desktop platforms:
 
 ```shell
-sudo apt install libsdl2-dev libpoco-dev libfreetype-dev cmake  # Debian/Ubuntu Linux
-brew install sdl2 poco freetype  # macOS
-vcpkg install sdl2 poco freetype # Windows, should be pulled in automatically via vcpkg.json
+sudo apt install libsdl2-dev libpoco-dev libfreetype-dev cmake  # Debian/Ubuntu Linux, SDL2
+sudo apt install libsdl3-dev libpoco-dev libfreetype-dev cmake  # Debian/Ubuntu Linux, SDL3
+brew install sdl2 poco freetype  # macOS, SDL2
+brew install sdl3 poco freetype  # macOS, SDL3
+vcpkg install sdl3 poco freetype  # Windows, SDL3
+vcpkg install sdl2 poco freetype  # Windows, SDL2
 ```
 
 ### Configure and build projectMSDL
@@ -56,6 +59,10 @@ mkdir cmake-build
 cmake -S . -B cmake-build -DCMAKE_BUILD_TYPE=Release
 cmake --build cmake-build --config Release
 ```
+
+By default, CMake will use SDL3 if it is available and fall back to SDL2 otherwise. To select a specific
+SDL version, pass `-DUSE_SDL=SDL2` or `-DUSE_SDL=SDL3` when configuring the build. When using vcpkg in
+manifest mode, the matching SDL feature (`sdl2` or `sdl3`) is selected automatically.
 
 You can optionally add the `--parallel` argument with the number of CPU cores to use to the build command to speed up
 the build.

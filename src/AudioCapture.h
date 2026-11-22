@@ -60,12 +60,6 @@ public:
     void FillBuffer();
 
     /**
-     * @brief Returns the current audio peak level (0.0-1.0) for display.
-     * @return The current audio level, or -1.0 if not available.
-     */
-    float CurrentAudioLevel() const;
-
-    /**
      * @brief Refreshes the list of available audio devices.
      *
      * Called on SDL3 audio device hotplug events to update the device list.

@@ -13,8 +13,8 @@
 #include "imgui_impl_sdl2.h"
 #endif
 
-#include <cmath>
 #include <Poco/NotificationCenter.h>
+#include <cmath>
 
 #include <Poco/Util/Application.h>
 
@@ -86,13 +86,17 @@ void ProjectMGUI::UpdateFontSize()
     ImGuiIO& io = ImGui::GetIO();
 
 #ifdef USE_SDL3
-    auto displayIndex = SDL_GetDisplayForWindow(_renderingWindow);
+    // SDL3 returns a display ID, with 0 being the invalid value.
+    auto display = SDL_GetDisplayForWindow(_renderingWindow);
+    const bool displayValid = display != 0;
 #else
-    auto displayIndex = SDL_GetWindowDisplayIndex(_renderingWindow);
+    // SDL2 returns a display index, with -1 being the invalid value.
+    auto display = SDL_GetWindowDisplayIndex(_renderingWindow);
+    const bool displayValid = display >= 0;
 #endif
-    if (displayIndex < 0)
+    if (!displayValid)
     {
-        poco_debug_f1(_logger, "Could not get display index for application window: %s", std::string(SDL_GetError()));
+        poco_debug_f1(_logger, "Could not get display for application window: %s", std::string(SDL_GetError()));
         return;
     }
 
@@ -104,7 +108,7 @@ void ProjectMGUI::UpdateFontSize()
         return;
     }
 
-    poco_debug_f3(_logger, "Scaling factor change for display %?d: %hf -> %hf", displayIndex, _textScalingFactor, newScalingFactor);
+    poco_debug_f3(_logger, "Scaling factor change for display %?d: %hf -> %hf", static_cast<int>(display), _textScalingFactor, newScalingFactor);
 
     _textScalingFactor = newScalingFactor;
 

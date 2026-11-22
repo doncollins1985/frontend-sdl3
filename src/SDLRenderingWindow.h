@@ -3,9 +3,9 @@
 #include "notifications/UpdateWindowTitleNotification.h"
 
 #ifdef USE_SDL3
-# include <SDL3/SDL.h>
+#include <SDL3/SDL.h>
 #else
-# include <SDL2/SDL.h>
+#include <SDL2/SDL.h>
 #endif
 
 #include <Poco/Logger.h>
@@ -116,6 +116,22 @@ protected:
      * Prints OpenGL debug information.
      */
     void DumpOpenGLInfo();
+
+    /**
+     * @brief Returns the number of connected displays.
+     */
+    int DisplayCount() const;
+
+    /**
+     * @brief Returns the bounds of the display at the given index.
+     *
+     * SDL3 identifies displays by ID instead of index, so the current display
+     * list is enumerated and the ID at @a displayIndex is looked up.
+     *
+     * @param displayIndex The zero-based display index.
+     * @return The display bounds, or a zero rectangle if the index is invalid.
+     */
+    SDL_Rect DisplayBounds(int displayIndex) const;
 
     /**
      * @brief Receives notifications requesting an update of the window title.

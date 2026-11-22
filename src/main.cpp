@@ -1,9 +1,10 @@
 #include "ProjectMSDLApplication.h"
 
 #ifdef USE_SDL3
-# include <SDL3/SDL.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 #else
-# include <SDL2/SDL.h>
+#include <SDL2/SDL.h>
 #endif
 
 int main(int argc, char* argv[])

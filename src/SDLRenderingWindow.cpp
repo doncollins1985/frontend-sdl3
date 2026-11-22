@@ -13,18 +13,14 @@
 #endif
 
 #ifdef USE_SDL3
-# include <SDL3/SDL_opengl.h>
+#include <SDL3/SDL_opengl.h>
 #else
-# include <SDL2/SDL_opengl.h>
+#include <SDL2/SDL_opengl.h>
 #endif
 
 const char* SDLRenderingWindow::name() const
 {
-#ifdef USE_SDL3
-    return "SDL3 Rendering Window";
-#else
-    return "SDL2 Rendering Window";
-#endif
+    return "SDL Rendering Window";
 }
 
 void SDLRenderingWindow::initialize(Poco::Util::Application& app)
@@ -178,12 +174,7 @@ void SDLRenderingWindow::ShowCursor(bool visible)
 
 void SDLRenderingWindow::NextDisplay()
 {
-#ifdef USE_SDL3
-    int numDisplays;
-    SDL_GetDisplays(&numDisplays);
-#else
-    auto numDisplays = SDL_GetNumVideoDisplays();
-#endif
+    const int numDisplays = DisplayCount();
 
     if (numDisplays < 2)
     {
@@ -213,16 +204,13 @@ void SDLRenderingWindow::NextDisplay()
     if (newDisplay != currentDisplay)
     {
 
-        SDL_Rect oldBounds{};
-        SDL_Rect newBounds;
-
         int leftOffset{0};
         int topOffset{0};
 
-        SDL_GetDisplayBounds(newDisplay, &newBounds);
+        SDL_Rect newBounds = DisplayBounds(newDisplay);
         if (currentDisplay >= 0)
         {
-            SDL_GetDisplayBounds(currentDisplay, &oldBounds);
+            SDL_Rect oldBounds = DisplayBounds(currentDisplay);
             leftOffset = left - oldBounds.x;
             topOffset = top - oldBounds.y;
         }
@@ -263,19 +251,13 @@ void SDLRenderingWindow::CreateSDLWindow()
     if (display > 0)
     {
         poco_debug_f1(_logger, "User requested to place window on monitor %?d.", display);
-#ifdef USE_SDL3
-        int numDisplays;
-        SDL_GetDisplays(&numDisplays);
-#else
-        auto numDisplays = SDL_GetNumVideoDisplays();
-#endif
+        const int numDisplays = DisplayCount();
         if (display > numDisplays)
         {
             display = numDisplays;
         }
 
-        SDL_Rect bounds;
-        SDL_GetDisplayBounds(display - 1, &bounds);
+        SDL_Rect bounds = DisplayBounds(display - 1);
 
         if (positionOverridden)
         {
@@ -311,7 +293,7 @@ void SDLRenderingWindow::CreateSDLWindow()
         SDL_SetWindowPosition(_renderingWindow, left, top);
     }
 #else
-	SDL_SetHint(SDL_HINT_APP_NAME, "projectM");
+    SDL_SetHint(SDL_HINT_APP_NAME, "projectM");
 	
     _renderingWindow = SDL_CreateWindow("projectM", left, top, width, height,
                                         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
@@ -379,6 +361,51 @@ void SDLRenderingWindow::DestroySDLWindow()
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
+int SDLRenderingWindow::DisplayCount() const
+{
+#ifdef USE_SDL3
+    int count{0};
+    auto displays = SDL_GetDisplays(&count);
+    if (displays)
+    {
+        SDL_free(displays);
+    }
+    return count;
+#else
+    return SDL_GetNumVideoDisplays();
+#endif
+}
+
+SDL_Rect SDLRenderingWindow::DisplayBounds(int displayIndex) const
+{
+    SDL_Rect bounds{};
+
+    if (displayIndex < 0)
+    {
+        return bounds;
+    }
+
+#ifdef USE_SDL3
+    int count{0};
+    auto displays = SDL_GetDisplays(&count);
+    if (displays)
+    {
+        if (displayIndex < count)
+        {
+            SDL_GetDisplayBounds(displays[displayIndex], &bounds);
+        }
+        SDL_free(displays);
+    }
+#else
+    if (displayIndex < SDL_GetNumVideoDisplays())
+    {
+        SDL_GetDisplayBounds(displayIndex, &bounds);
+    }
+#endif
+
+    return bounds;
+}
+
 void SDLRenderingWindow::DumpOpenGLInfo()
 {
     poco_debug_f1(_logger, "- GL_VERSION: %s", std::string(reinterpret_cast<const char*>(glGetString(GL_VERSION))));
@@ -394,12 +421,7 @@ int SDLRenderingWindow::GetCurrentDisplay()
 
     SDL_GetWindowPosition(_renderingWindow, &left, &top);
 
-#ifdef USE_SDL3
-    int numDisplays = 0;
-    SDL_GetDisplays(&numDisplays);
-#else
-    auto numDisplays = SDL_GetNumVideoDisplays();
-#endif
+    const int numDisplays = DisplayCount();
 
     poco_debug_f1(_logger, "Displays available: %?d.", numDisplays);
     poco_debug_f2(_logger, "Window position is X=%?d Y=%?d", left, top);
@@ -408,8 +430,7 @@ int SDLRenderingWindow::GetCurrentDisplay()
     int currentDisplay{-1};
     for (int display = 0; display < numDisplays; display++)
     {
-        SDL_Rect bounds;
-        SDL_GetDisplayBounds(display, &bounds);
+        SDL_Rect bounds = DisplayBounds(display);
 
         poco_debug_f1(_logger, "Bounds for display %?d:", display);
         poco_debug_f4(_logger, "    X=%?d Y=%?d W=%?d H=%?d", bounds.x, bounds.y, bounds.w, bounds.h);
@@ -439,8 +460,7 @@ void SDLRenderingWindow::GetWindowPosition(int& left, int& top, bool relative)
         return;
     }
 
-    SDL_Rect bounds;
-    SDL_GetDisplayBounds(GetCurrentDisplay(), &bounds);
+    SDL_Rect bounds = DisplayBounds(GetCurrentDisplay());
 
     left -= bounds.x;
     top -= bounds.y;

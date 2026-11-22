@@ -9,9 +9,9 @@
 #include "notifications/DisplayToastNotification.h"
 
 #ifdef USE_SDL3
-# include <SDL3/SDL.h>
+#include <SDL3/SDL.h>
 #else
-# include <SDL2/SDL.h>
+#include <SDL2/SDL.h>
 #endif
 
 #include <Poco/Logger.h>

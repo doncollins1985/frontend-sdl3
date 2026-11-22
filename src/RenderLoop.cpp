@@ -9,14 +9,14 @@
 
 #include <Poco/NotificationCenter.h>
 
-#include <Poco/Util/Application.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <Poco/Util/Application.h>
 
 #ifdef USE_SDL3
-# include <SDL3/SDL.h>
+#include <SDL3/SDL.h>
 #else
-# include <SDL2/SDL.h>
+#include <SDL2/SDL.h>
 #endif
 
 #include "ProjectMSDLApplication.h"

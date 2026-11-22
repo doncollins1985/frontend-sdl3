@@ -137,16 +137,8 @@ else()
 endif()
 
 if (MSVC)
-    if(USE_SDL3)
-        set_target_properties(projectMSDL
-                PROPERTIES
-                VS_DPI_AWARE "PerMonitor"
-                )
-        target_link_options(projectMSDL PRIVATE "/SUBSYSTEM:CONSOLE")
-    else()
-        set_target_properties(projectMSDL
-                PROPERTIES
-                VS_DPI_AWARE "PerMonitor"
-                )
-    endif()
+    set_target_properties(projectMSDL
+            PROPERTIES
+            VS_DPI_AWARE "PerMonitor"
+            )
 endif ()

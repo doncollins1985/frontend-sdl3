@@ -1,29 +1,50 @@
 #include "AudioCaptureImpl_SDL.h"
 
-#include <Poco/Util/Application.h>
+#include "notifications/AudioDataAvailableNotification.h"
 
-#include <projectM-4/projectM.h>
+#include <Poco/NotificationCenter.h>
+#include <Poco/Util/Application.h>
 
 #ifdef USE_SDL3
 #include <vector>
 #endif
 
+#ifdef USE_SDL3
+namespace {
+/**
+ * @brief Returns the number of available audio recording devices.
+ *
+ * SDL3 doesn't offer a function to only query the device count, so the device
+ * list has to be enumerated and freed again.
+ */
+int RecordingDeviceCount()
+{
+    int deviceCount = 0;
+    auto deviceIds = SDL_GetAudioRecordingDevices(&deviceCount);
+    if (deviceIds)
+    {
+        SDL_free(deviceIds);
+    }
+    return deviceCount;
+}
+} // namespace
+#endif
+
 AudioCaptureImpl::AudioCaptureImpl()
-    : _requestedSampleCount(projectm_pcm_get_max_samples())
 {
     auto targetFps = Poco::Util::Application::instance().config().getUInt("projectM.fps", 60);
     if (targetFps > 0)
     {
         _requestedSampleCount = std::min(_requestedSampleFrequency / targetFps, _requestedSampleCount);
+        // Don't let the buffer get too small to prevent excessive updates calls.
+        // 300 samples is enough for 144 FPS.
         _requestedSampleCount = std::max(_requestedSampleCount, 300U);
     }
 
-    SDL_InitSubSystem(SDL_INIT_AUDIO);
-#ifndef USE_SDL3
 #ifdef SDL_HINT_AUDIO_INCLUDE_MONITORS
     SDL_SetHint(SDL_HINT_AUDIO_INCLUDE_MONITORS, "1");
 #endif
-#endif
+    SDL_InitSubSystem(SDL_INIT_AUDIO);
 }
 
 AudioCaptureImpl::~AudioCaptureImpl()
@@ -76,9 +97,8 @@ std::map<int, std::string> AudioCaptureImpl::AudioDeviceList()
     return deviceList;
 }
 
-void AudioCaptureImpl::StartRecording(projectm* projectMHandle, int audioDeviceIndex)
+void AudioCaptureImpl::StartRecording(int audioDeviceIndex)
 {
-    _projectMHandle = projectMHandle;
     _currentAudioDeviceIndex = audioDeviceIndex;
 
     poco_debug_f1(_logger, "Using SDL audio driver \"%s\".", std::string(SDL_GetCurrentAudioDriver()));
@@ -114,35 +134,27 @@ void AudioCaptureImpl::NextAudioDevice()
     StopRecording();
 
 #ifdef USE_SDL3
-    int deviceCount = 0;
-    SDL_GetAudioRecordingDevices(&deviceCount);
-    int nextAudioDeviceId = ((_currentAudioDeviceIndex + 2) % (deviceCount + 1)) - 1;
+    int nextAudioDeviceId = ((_currentAudioDeviceIndex + 2) % (RecordingDeviceCount() + 1)) - 1;
 #else
+    // Will wrap around to default capture device (-1).
     int nextAudioDeviceId = ((_currentAudioDeviceIndex + 2) % (SDL_GetNumAudioDevices(true) + 1)) - 1;
 #endif
 
-    StartRecording(_projectMHandle, nextAudioDeviceId);
+    StartRecording(nextAudioDeviceId);
 }
 
 void AudioCaptureImpl::AudioDeviceIndex(int index)
 {
 #ifdef USE_SDL3
-    int deviceCount = 0;
-    SDL_GetAudioRecordingDevices(&deviceCount);
-    if (index >= -1 && index < deviceCount)
-    {
-        StopRecording();
-        _currentAudioDeviceIndex = index;
-        StartRecording(_projectMHandle, index);
-    }
+    if (index >= -1 && index < RecordingDeviceCount())
 #else
     if (index >= -1 && index < SDL_GetNumAudioDevices(true))
+#endif
     {
         StopRecording();
         _currentAudioDeviceIndex = index;
-        StartRecording(_projectMHandle, index);
+        StartRecording(index);
     }
-#endif
 }
 
 int AudioCaptureImpl::AudioDeviceIndex() const
@@ -234,6 +246,7 @@ bool AudioCaptureImpl::OpenAudioDevice()
     requestedSpecs.callback = AudioCaptureImpl::AudioInputCallback;
     requestedSpecs.userdata = this;
 
+    // Will be NULL on error, which happens if the requested index is -1. This automatically selects the default device.
     auto deviceName = SDL_GetAudioDeviceName(_currentAudioDeviceIndex, true);
     _currentAudioDeviceID = SDL_OpenAudioDevice(deviceName, true, &requestedSpecs, &actualSpecs, SDL_AUDIO_ALLOW_CHANNELS_CHANGE);
 
@@ -258,54 +271,51 @@ bool AudioCaptureImpl::OpenAudioDevice()
 #endif
 }
 
-#ifdef USE_SDL3
+void AudioCaptureImpl::AudioInputCallback(void* userData, unsigned char* stream, int len)
+{
+    poco_assert_dbg(userData);
+
+    if (len < static_cast<int>(sizeof(float)))
+    {
+        return;
+    }
+
+    auto instance = reinterpret_cast<AudioCaptureImpl*>(userData);
+
+    unsigned int samples = len / sizeof(float);
+
+    Poco::NotificationCenter::defaultCenter().postNotification(
+        new AudioDataAvailableNotification(instance->_channels,
+                                           reinterpret_cast<float*>(stream),
+                                           samples));
+}
+
 void AudioCaptureImpl::FillBuffer()
 {
-    if (!_recordingStream || !_projectMHandle)
+#ifdef USE_SDL3
+    if (!_recordingStream)
     {
         return;
     }
 
     int available = SDL_GetAudioStreamAvailable(_recordingStream);
-    if (available <= 0)
+    if (available < static_cast<int>(sizeof(float)))
     {
         return;
     }
 
-    std::vector<float> buffer(available / sizeof(float));
+    std::vector<float> buffer(static_cast<size_t>(available) / sizeof(float));
     int bytesRead = SDL_GetAudioStreamData(_recordingStream, buffer.data(), available);
 
     if (bytesRead > 0)
     {
-        unsigned int samples = bytesRead / sizeof(float) / _channels;
-        projectm_pcm_add_float(_projectMHandle, buffer.data(), samples,
-                               static_cast<projectm_channels>(_channels));
+        // Reuse the same conversion and notification code as the SDL2 callback.
+        AudioInputCallback(this, reinterpret_cast<unsigned char*>(buffer.data()), bytesRead);
     }
-}
-#else
-void AudioCaptureImpl::FillBuffer()
-{
-    // SDL2 uses async callbacks to directly fill projectM's audio buffer.
-}
-
-void AudioCaptureImpl::AudioInputCallback(void* userData, unsigned char* stream, int len)
-{
-    poco_assert_dbg(userData);
-    auto instance = reinterpret_cast<AudioCaptureImpl*>(userData);
-
-    unsigned int samples = len / sizeof(float) / instance->_channels;
-
-    projectm_pcm_add_float(instance->_projectMHandle, reinterpret_cast<float*>(stream), samples,
-                           static_cast<projectm_channels>(instance->_channels));
-}
 #endif
-
-float AudioCaptureImpl::CurrentAudioLevel() const
-{
-    return -1.0f;
 }
 
 void AudioCaptureImpl::RefreshDeviceList()
 {
-    // Device list is re-enumerated on next AudioDeviceList() call.
+    // The device list is re-enumerated on the next AudioDeviceList() call.
 }
